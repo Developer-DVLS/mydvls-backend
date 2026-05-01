@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to DVLS</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #fbeff2;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        width: 100%;
+        max-width: 600px;
+        margin: 20px auto;
+        background: #ffffff;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+      }
+      .header {
+        background-color: #f8d3dd;
+        text-align: center;
+        padding: 20px;
+      }
+      .header h1 {
+        margin: 0;
+        font-size: 26px;
+        color: #b8366b;
+      }
+      .content {
+        padding: 20px;
+        color: #444444;
+      }
+      .button {
+        display: inline-block;
+        padding: 10px 20px;
+        margin: 20px 0;
+        background-color: #b8366b;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+      }
+      .footer {
+        text-align: center;
+        padding: 10px;
+        font-size: 12px;
+        color: #666;
+        background-color: #f4f4f4;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Welcome to Denver Oilmen Club</h1>
+      </div>
+      <div class="content">
+        <p>Dear {{ user }},</p>
+        <p>Thank you for signing up! We’re thrilled to have you with us.</p>
+        <p>Please click the button below to verify your email:</p>
+        <a href="{{ verification_link }}" class="button">Verify Your Email</a>
+      </div>
+      <div class="footer">&copy; Denver Oilmen. All rights reserved.</div>
+    </div>
+  </body>
+</html>

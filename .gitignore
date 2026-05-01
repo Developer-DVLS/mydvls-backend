@@ -58,3 +58,6 @@ Thumbs.db
 # ALEMBIC (optional)
 # =========================
 alembic/versions/__pycache__/
+
+# static files
+static/

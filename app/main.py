@@ -1,17 +1,29 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.database import engine, Base
 from app import models
+from app.utils.create_superuser import create_superuser
 
-# Create database tables (for simple setup)
-Base.metadata.create_all(bind=engine)
+from app.models.user import User    
+from app.models.address import Address
+from app.api.v1.endpoints.users import user_router
+from app.api.v1.endpoints.media import media_router
+from app.api.v1.endpoints.dashboard.users import admin_user_router
 
 app = FastAPI(
     title="FastAPI App",
     description="A FastAPI backend with PostgreSQL",
     version="1.0.0",
 )
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+app.include_router(user_router)
+app.include_router(media_router)
+app.include_router(admin_user_router)
+
 
 # =========================
 # CORS CONFIGURATION
@@ -40,3 +52,9 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.on_event("startup")
+async def startup_event():
+    # run only once
+    await create_superuser()
