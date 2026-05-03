@@ -10,6 +10,7 @@ from app.core.database import Base
 from app.models.user import User
 from app.models.address import Address
 from app.models.media import Media
+from app.models.products import (ProductCategory, Product, ProductVariant, ProductAttribute, ProductVariantImage)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
