@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.schemas.productvariants import PaginatedProductVariantResponse, ProductVariantRequest, ProductVariantResponse, ProductVariantUpdate
 from app.core.database import get_db
-from app.models.products import Product, ProductVariant
+from app.models.products import Product, ProductVariant, ProductVariantImage
 from app.models.user import User
 from app.auth.permissions import staff_only
 from app.utils.pagination import get_paginated_result
@@ -88,10 +88,19 @@ async def create_variant(
 
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    
+    # check if sku already exists
+    sku_exists_result = await db.execute(
+        select(ProductVariant).where(ProductVariant.sku == data.sku)
+    )
+    sku_exists = sku_exists_result.scalars().first()
+    
+    if sku_exists:
+        raise HTTPException(status_code=400, detail="Product variant with same SKU already exists")
 
     new_variant = ProductVariant(
         product_id=data.product_id,
-        sku=data.sku,
+        sku=data.sku.lower(), #already save lowercase
         price=data.price,
         cost_price=data.cost_price,
         margin=data.margin,
@@ -103,7 +112,19 @@ async def create_variant(
     db.add(new_variant)
     await db.commit()
 
-    # IMPORTANT: reload with relationships
+    # create images
+    if data.variant_images:
+        for image in data.variant_images:
+            db.add(
+                ProductVariantImage(
+                    variant_id=new_variant.id,
+                    image_url=image.image_url
+                )
+            )
+
+    await db.commit()
+
+    # reload with relationships
     result = await db.execute(
         select(ProductVariant)
         .options(
@@ -117,7 +138,6 @@ async def create_variant(
     variant = result.scalars().first()
 
     return variant
-
 
 
 @admin_variant_router.put('/{variant_id}', response_model=ProductVariantResponse)

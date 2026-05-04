@@ -13,8 +13,18 @@ class ProductVariantBase(BaseModel):
     is_active: bool = True
     is_featured: bool = False
     
-class ProductVariantRequest(ProductVariantBase):
+class ProductVariantImageBase(BaseModel):
+    image_url: str
+
+class ProductVariantImageRequest(ProductVariantImageBase):
     pass
+
+class ProductVariantImageResponse(ProductVariantImageBase):
+    id: int
+    variant_id: int
+    
+class ProductVariantRequest(ProductVariantBase):
+    variant_images: Optional[List[ProductVariantImageRequest]] = None
 
 class ProductVariantUpdate(BaseModel):
     product_id: Optional[int] = None
@@ -26,13 +36,13 @@ class ProductVariantUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_featured: Optional[bool] = None
     
-class ProductVariantResponse(ProductVariantBase):
-    id: int
-    created_at: datetime
-    updated_at: datetime
+# class ProductVariantResponse(ProductVariantBase):
+#     id: int
+#     created_at: datetime
+#     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+#     class Config:
+#         from_attributes = True
         
 class ProductMini(BaseModel):
     id: int
