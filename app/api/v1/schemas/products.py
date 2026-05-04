@@ -87,3 +87,7 @@ class NestedProductResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        
+class ProductDropdown(BaseModel):
+    id: int
+    name: str

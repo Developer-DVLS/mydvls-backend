@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.products import NestedProductResponse, PaginatedProductResponse, ProductCreateRequest, ProductRequest, ProductResponse, ProductUpdate
+from app.api.v1.schemas.products import NestedProductResponse, PaginatedProductResponse, ProductCreateRequest, ProductDropdown, ProductRequest, ProductResponse, ProductUpdate
 from app.core.database import get_db
 from app.models.products import Product, ProductCategory, ProductVariant
 from app.models.user import User
@@ -47,6 +47,35 @@ async def list_products(
     )
 
     return await get_paginated_result(db, query, skip, limit)
+
+@product_router.get('/options', response_model=List[ProductDropdown])
+async def list_product_options(
+    search: Optional[str] = None,
+    category_id: Optional[int] = None,
+    is_active: Optional[bool] = None,
+    is_featured: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Product).order_by(Product.created_at.desc())
+
+    if search:
+        query = query.where(Product.name.ilike(f"%{search}%"))
+
+    if category_id is not None:
+        query = query.where(Product.category_id == category_id)
+
+    if is_active is not None:
+        query = query.where(Product.is_active == is_active)
+
+    if is_featured is not None:
+        query = query.where(Product.is_featured == is_featured)
+
+    result = await db.execute(query.options(
+            selectinload(Product.category)
+        )
+    )
+
+    return result.scalars().all()
 
 
 @admin_product_router.get('/{product_id}', response_model=ProductResponse)

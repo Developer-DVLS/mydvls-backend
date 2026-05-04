@@ -40,3 +40,7 @@ class CategoryUpdateRequest(BaseModel):
     is_active: Optional[bool] = None
     is_featured: Optional[bool] = None
     ordering: Optional[int] = None
+    
+class ProductCategoryDropdown(BaseModel):
+    id: int
+    name: str

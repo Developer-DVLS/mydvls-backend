@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.schemas.productcategories import CategoryRequest, CategoryResponse, CategoryUpdateRequest, PaginatedCategoryResponse
+from app.api.v1.schemas.productcategories import CategoryRequest, CategoryResponse, CategoryUpdateRequest, PaginatedCategoryResponse, ProductCategoryDropdown
 from app.core.database import get_db
 from app.models.products import ProductCategory
 from app.models.user import User
@@ -39,6 +39,31 @@ async def list_category(
         
     
     return await get_paginated_result(db, query, skip, limit)
+
+# api for dropdown selection 
+@product_category_router.get('/options', response_model=List[ProductCategoryDropdown])
+async def list_category_options(
+    search: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    is_featured: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(ProductCategory).order_by(ProductCategory.ordering.asc())
+    
+    if search:
+        query = query.where(
+            ProductCategory.name.ilike(f"%{search}%"),
+        )
+    
+    if is_active is not None:
+        query = query.where(ProductCategory.is_active == is_active)
+    if is_featured is not None:
+        query = query.where(ProductCategory.is_featured == is_featured)
+        
+    result = await db.execute(query)
+        
+    return result.scalars().all()
+
 
 @admin_product_category_router.get('/{category_id}/', response_model=CategoryResponse)
 async def get_category(
