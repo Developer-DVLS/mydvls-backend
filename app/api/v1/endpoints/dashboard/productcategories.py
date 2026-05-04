@@ -11,15 +11,16 @@ from app.models.products import ProductCategory
 from app.models.user import User
 from app.auth.permissions import staff_only
 from app.utils.pagination import get_paginated_result
+from app.api.v1.endpoints.shop import shop_router
 
 admin_product_category_router = APIRouter(prefix="/dashboard/product_category", tags=['Product category CRUD'])
+product_category_router = APIRouter(prefix="/product-category", tags=['Product api'])
 
-@admin_product_category_router.get('/', response_model=PaginatedCategoryResponse)
+@product_category_router.get('/', response_model=PaginatedCategoryResponse)
 async def list_category(
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
     is_featured: Optional[bool] = None,
-    current_user: User = Depends(staff_only),
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     db: AsyncSession = Depends(get_db),
@@ -87,7 +88,7 @@ async def create_category(
     return new_category
     
 
-@admin_product_category_router.put('/{category_id}', response_model=CategoryResponse)
+@admin_product_category_router.patch('/{category_id}', response_model=CategoryResponse)
 async def update_category(
     category_id: int,
     data: CategoryUpdateRequest,
@@ -106,26 +107,24 @@ async def update_category(
             detail="Category not found"
         )
 
-    # optional: check duplicate name (if name is being changed)
-    if category.name != data.name:
-        existing = await db.execute(
-            select(ProductCategory).where(ProductCategory.name == data.name)
-        )
-        existing_category = existing.scalars().first()
+    update_data = data.model_dump(exclude_unset=True)
 
-        if existing_category:
+    # check duplicate name only if name is being updated
+    if "name" in update_data and update_data["name"] != category.name:
+        existing = await db.execute(
+            select(ProductCategory).where(
+                ProductCategory.name == update_data["name"]
+            )
+        )
+        if existing.scalars().first():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Category with this name already exists"
             )
 
-    # update fields
-    category.name = data.name
-    category.description = data.description
-    category.image_url = data.image_url
-    category.is_active = data.is_active
-    category.is_featured = data.is_featured
-    category.ordering = data.ordering
+    # apply only provided fields
+    for field, value in update_data.items():
+        setattr(category, field, value)
 
     await db.commit()
     await db.refresh(category)

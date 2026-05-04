@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.products import NestedProductResponse, PaginatedProductResponse, ProductCreateRequest, ProductRequest, ProductResponse
+from app.api.v1.schemas.products import NestedProductResponse, PaginatedProductResponse, ProductCreateRequest, ProductRequest, ProductResponse, ProductUpdate
 from app.core.database import get_db
 from app.models.products import Product, ProductCategory, ProductVariant
 from app.models.user import User
@@ -15,14 +15,14 @@ from app.utils.pagination import get_paginated_result
 
 
 admin_product_router = APIRouter(prefix="/dashboard/product", tags=['Product CRUD'])
+product_router = APIRouter(prefix="/product", tags=['Product api'])
 
-@admin_product_router.get('/', response_model=PaginatedProductResponse)
+@product_router.get('/', response_model=PaginatedProductResponse)
 async def list_products(
     search: Optional[str] = None,
     category_id: Optional[int] = None,
     is_active: Optional[bool] = None,
     is_featured: Optional[bool] = None,
-    current_user: User = Depends(staff_only),
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     db: AsyncSession = Depends(get_db),
@@ -105,10 +105,10 @@ async def create_product(
 
     return product
 
-@admin_product_router.put('/{product_id}', response_model=ProductResponse)
+@admin_product_router.patch('/{product_id}', response_model=ProductResponse)
 async def update_product(
     product_id: int,
-    data: ProductRequest,
+    data: ProductUpdate,
     current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ):
@@ -120,23 +120,25 @@ async def update_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    # optional: validate category
-    if data.category_id:
+    update_data = data.model_dump(exclude_unset=True)
+
+    # validate category only if provided
+    if "category_id" in update_data:
         cat = await db.execute(
-            select(ProductCategory).where(ProductCategory.id == data.category_id)
+            select(ProductCategory).where(
+                ProductCategory.id == update_data["category_id"]
+            )
         )
         if not cat.scalars().first():
             raise HTTPException(status_code=404, detail="Category not found")
 
-    product.category_id = data.category_id
-    product.name = data.name
-    product.description = data.description
-    product.is_active = data.is_active
-    product.is_featured = data.is_featured
+    # apply only provided fields
+    for field, value in update_data.items():
+        setattr(product, field, value)
 
     await db.commit()
     await db.refresh(product)
-    
+
     # reload with relationship
     result = await db.execute(
         select(Product)

@@ -11,9 +11,10 @@ from app.models.address import Address
 from app.api.v1.endpoints.users import user_router
 from app.api.v1.endpoints.media import media_router
 from app.api.v1.endpoints.dashboard.users import admin_user_router
-from app.api.v1.endpoints.dashboard.productcategories import admin_product_category_router
-from app.api.v1.endpoints.dashboard.products import admin_product_router
-from app.api.v1.endpoints.dashboard.productvariants import admin_variant_router
+from app.api.v1.endpoints.dashboard.productcategories import product_category_router, admin_product_category_router
+from app.api.v1.endpoints.dashboard.products import product_router, admin_product_router
+from app.api.v1.endpoints.dashboard.productvariants import product_variant_router, admin_variant_router
+from app.api.v1.endpoints.shop import shop_router
 
 app = FastAPI(
     title="FastAPI App",
@@ -26,9 +27,13 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(user_router)
 app.include_router(media_router)
 app.include_router(admin_user_router)
+app.include_router(product_category_router)
 app.include_router(admin_product_category_router)
+app.include_router(product_router)
 app.include_router(admin_product_router)
+app.include_router(product_variant_router)
 app.include_router(admin_variant_router)
+app.include_router(shop_router)
 
 
 # =========================

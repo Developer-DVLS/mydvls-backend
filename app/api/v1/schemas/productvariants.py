@@ -23,8 +23,17 @@ class ProductVariantImageResponse(ProductVariantImageBase):
     id: int
     variant_id: int
     
+class ProductAttributeRequest(BaseModel):
+    key: str
+    value: str
+    
+class ProductAttributeUpdate(BaseModel):
+    key: Optional[str] = None
+    value: Optional[str] = None
+    
 class ProductVariantRequest(ProductVariantBase):
     variant_images: Optional[List[ProductVariantImageRequest]] = None
+    attributes: Optional[List[ProductAttributeRequest]] = None
 
 class ProductVariantUpdate(BaseModel):
     product_id: Optional[int] = None
@@ -57,6 +66,11 @@ class ImageMini(BaseModel):
 
     class Config:
         from_attributes = True
+        
+class ProductAttributeMini(BaseModel):
+    id: int
+    key: str
+    value: str
 
 class ProductVariantResponse(ProductVariantBase):
     id: int
@@ -64,6 +78,7 @@ class ProductVariantResponse(ProductVariantBase):
     updated_at: datetime
     product: Optional[ProductMini] = None
     images: Optional[List[ImageMini]] = None
+    attributes: Optional[List[ProductAttributeMini]] = None
 
     class Config:
         from_attributes = True
