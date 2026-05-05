@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     
     REFRESH_TOKEN_EXPIRE_DAYS: int = os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 30)
     
+    # azure blob container
+    AZURE_STORAGE_CONNECTION_STRING: str = os.getenv('AZURE_STORAGE_CONNECTION_STRING', '')
+    AZURE_CONTAINER_NAME: str = os.getenv('AZURE_CONTAINER_NAME', '')
+    AZURE_ACCOUNT_KEY: str = os.getenv('AZURE_ACCOUNT_KEY', '')
     
     
     @property

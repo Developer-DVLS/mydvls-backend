@@ -1,15 +1,16 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.shop import ShopProductDetailResponse, ShopResponse
+from app.api.v1.schemas.shop import PaginatedShopProductResponse, ShopProductDetailResponse
 from app.core.database import get_db
-from app.models.products import Product, ProductCategory, ProductVariant
+from app.models.products import Product, ProductVariant
+from app.utils.pagination import get_paginated_result
 
 
-shop_router = APIRouter(prefix="", tags=['Product api'])
+shop_router = APIRouter(prefix="/shop", tags=['shop'])
 
 # @shop_router.get("/",response_model=ShopResponse)
 # async def shop(
@@ -93,6 +94,28 @@ shop_router = APIRouter(prefix="", tags=['Product api'])
 #         "categories": categories,
 #         "products": products_data
 #     }
+
+@shop_router.get('/products', response_model=PaginatedShopProductResponse)
+async def shop_products_list(
+    search: Optional[str] = None,
+    category_id: Optional[int] = None,
+    is_featured: Optional[bool] = None,
+    skip: int = Query(0, ge=0, description="Number of items to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(Product).where(Product.is_active == True).order_by(Product.created_at.desc())
+
+    if search:
+        query = query.where(Product.name.ilike(f"%{search}%"))
+
+    if category_id is not None:
+        query = query.where(Product.category_id == category_id)
+
+    if is_featured is not None:
+        query = query.where(Product.is_featured == is_featured)
+
+    return await get_paginated_result(db, query, skip, limit)
     
 
 @shop_router.get("/product-detail/{product_id}/",response_model=ShopProductDetailResponse)
@@ -104,6 +127,7 @@ async def product_detail(
         select(Product)
         .options(
             selectinload(Product.variants).selectinload(ProductVariant.images),
+            selectinload(Product.variants).selectinload(ProductVariant.attributes),
             selectinload(Product.category)
         )
         .where(

@@ -1,11 +1,12 @@
 from typing import List
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, File, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.schemas.media import MediaResponse
 from app.core.database import get_db
 from app.models.media import Media
+from app.services.azureblob import AzureBlobService
 from app.services.mediaservice import MediaService
 
 media_router = APIRouter(prefix="/media", tags=["Media"])
@@ -54,3 +55,78 @@ async def delete_image(media_id: int, db: AsyncSession = Depends(get_db)):
         await db.commit()
         return {"message": "Deleted successfully"}
     return {"error": "Not found"}
+
+
+# azure blob container 
+
+blob_service = AzureBlobService()
+
+@media_router.post("/blob/upload")
+async def upload(
+    file: UploadFile = File(...),
+    folder: str = Query(..., description="e.g. products, categories, offers")
+):
+    try:
+        content = await file.read()
+
+        # ensure bytes
+        if not isinstance(content, bytes):
+            raise HTTPException(status_code=400, detail="Invalid file format")
+
+        blob_name = await blob_service.upload_image(file, "products")
+
+        return {"blob_name": blob_name}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@media_router.get("/blob/images")
+def get_images(
+    folder: str = Query(...)
+):
+    try:
+        images = blob_service.list_images_by_folder(folder)
+
+        return {
+            "folder": folder,
+            "count": len(images),
+            "images": [
+                {
+                    "blob_name": img,
+                    "url": blob_service.get_blob_url(img)
+                }
+                for img in images
+            ]
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@media_router.delete("/blob/images")
+def delete_image(
+    image_url: str = Query(...)
+):
+    try:
+        # get blob_name 
+        blob_name = blob_service.get_blob_name_from_url(image_url)
+        
+        success = blob_service.delete_image(blob_name)
+
+        if not success:
+            raise HTTPException(status_code=404, detail="Image not found")
+
+        return {"message": "Deleted successfully"}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# @media_router.get("/blob/images/url")
+# def get_image_url(
+#     blob_name: str = Query(...)
+# ):
+#     return {
+#         "blob_name": blob_name,
+#         "url": blob_service.get_blob_url(blob_name)
+#     }

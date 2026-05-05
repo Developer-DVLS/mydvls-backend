@@ -19,10 +19,12 @@ class ShopProductResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class ShopResponse(BaseModel):
-    categories: Optional[List[ShopCategoryResponse]] = None
-    products: Optional[List[ShopProductResponse]] = None
-    
+class PaginatedShopProductResponse(BaseModel):
+    total: int
+    skip: int
+    limit: int
+    data: Optional[List[ShopProductResponse]] = None
+
     class Config:
         from_attributes = True
         
@@ -34,6 +36,13 @@ class ShopImageMini(BaseModel):
     class Config:
         from_attributes = True
 
+class ShopProductAttribute(BaseModel):
+    id: int
+    key: str
+    value: str 
+    
+    class Config:
+        from_attributes = True
 
 class ShopProductVariant(BaseModel):
     id: int
@@ -46,6 +55,7 @@ class ShopProductVariant(BaseModel):
     is_featured: bool = False
     
     images: Optional[List[ShopImageMini]] = None
+    attributes: Optional[List[ShopProductAttribute]] = None
     
     class Config:
         from_attributes = True
