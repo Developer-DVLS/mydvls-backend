@@ -73,7 +73,7 @@ async def upload(
         if not isinstance(content, bytes):
             raise HTTPException(status_code=400, detail="Invalid file format")
 
-        blob_name = await blob_service.upload_image(file, "products")
+        blob_name = await blob_service.upload_image(content, file, folder)
 
         return {"blob_name": blob_name}
 

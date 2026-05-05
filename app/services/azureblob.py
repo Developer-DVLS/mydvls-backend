@@ -1,7 +1,8 @@
 from azure.storage.blob import (
     BlobServiceClient,
     generate_blob_sas,
-    BlobSasPermissions
+    BlobSasPermissions,
+    ContentSettings
 )
 from azure.core.exceptions import ResourceNotFoundError
 from datetime import datetime, timedelta
@@ -23,15 +24,21 @@ class AzureBlobService:
         self.account_key = AZURE_ACCOUNT_KEY  # needed for SAS
 
     # UPLOAD
-    async def upload_image(self, file, folder: str):
+    async def upload_image(self, content, file, folder: str):
 
         extension = file.filename.split(".")[-1]
         blob_name = f"{folder}/{uuid.uuid4()}.{extension}"
 
         blob_client = self.container_client.get_blob_client(blob_name)
 
-        content = await file.read()
-        blob_client.upload_blob(content, overwrite=True)
+        blob_client.upload_blob(
+            content, 
+            overwrite=True,
+            content_settings=ContentSettings(
+                content_type=file.content_type,  # VERY IMPORTANT
+                content_disposition="inline"
+            )
+        )
 
         return {
             "blob_name": blob_name,
