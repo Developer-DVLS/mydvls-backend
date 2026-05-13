@@ -144,7 +144,7 @@ async def shop_products_list(
             "id": p.id,
             "name": p.name,
             "description": p.description,
-            "price": p.variants[0].price,
+            "price": p.variants[0].price if p.variants else 0,
             "image": (
                 p.variants[0].images[0].image_url
                 if p.variants
