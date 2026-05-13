@@ -48,6 +48,8 @@ async def list_products(
 
     return await get_paginated_result(db, query, skip, limit)
 
+# lightweight api for dropdown options 
+# it returns id and name field only
 @product_router.get('/options', response_model=List[ProductDropdown])
 async def list_product_options(
     search: Optional[str] = None,

@@ -14,6 +14,7 @@ from app.api.v1.endpoints.dashboard.users import admin_user_router
 from app.api.v1.endpoints.dashboard.productcategories import product_category_router, admin_product_category_router
 from app.api.v1.endpoints.dashboard.products import product_router, admin_product_router
 from app.api.v1.endpoints.dashboard.productvariants import product_variant_router, admin_variant_router
+from app.api.v1.endpoints.dashboard.offers import offer_router
 from app.api.v1.endpoints.shop import shop_router
 
 app = FastAPI(
@@ -34,6 +35,7 @@ app.include_router(admin_product_router)
 app.include_router(product_variant_router)
 app.include_router(admin_variant_router)
 app.include_router(shop_router)
+app.include_router(offer_router)
 
 
 # =========================

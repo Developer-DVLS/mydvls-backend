@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.api.v1.schemas.shop import PaginatedShopProductResponse, ShopProductDetailResponse
 from app.core.database import get_db
 from app.models.products import Product, ProductVariant
+from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer
 from app.utils.pagination import get_paginated_result
 
 
@@ -115,8 +116,52 @@ async def shop_products_list(
     if is_featured is not None:
         query = query.where(Product.is_featured == is_featured)
 
-    return await get_paginated_result(db, query, skip, limit)
+    result = await db.execute(query.options(
+        selectinload(Product.variants).selectinload(ProductVariant.images)
+    ))
+    products = result.scalars().all()
     
+    # first get all active offers
+    offers = await get_all_active_offers(db)
+    
+    # Build indexes
+    item_map, category_map, store_offer, bogo_map = build_offer_indexes(offers)
+    
+    # 4. Attach best offer per product
+    # -------------------------
+    response = []
+
+    for p in products:
+        best_offer = resolve_offer(
+            p,
+            item_map,
+            category_map,
+            store_offer,
+            bogo_map
+        )
+
+        response.append({
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "price": p.variants[0].price,
+            "image": (
+                p.variants[0].images[0].image_url
+                if p.variants
+                and p.variants[0].images
+                else None
+            ),
+            "category_id": p.category_id,
+            "best_offer": best_offer
+        })
+
+    return {
+        "total": len(products),
+        "skip": skip,
+        "limit": limit,
+        "data": response,
+    }
+
 
 @shop_router.get("/product-detail/{product_id}/",response_model=ShopProductDetailResponse)
 async def product_detail(

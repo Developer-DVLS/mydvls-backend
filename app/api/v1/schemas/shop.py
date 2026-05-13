@@ -1,11 +1,24 @@
 from typing import List, Optional
 from pydantic import BaseModel
 
+from app.models.offers import DiscountType, Offer, OfferType
+
 class ShopCategoryResponse(BaseModel):
     id: int
     name: str
     image_url: Optional[str] = None
     
+    class Config:
+        from_attributes = True
+
+class ShopOfferRead(BaseModel):
+    id: int
+    name: str
+    code: str
+    type: OfferType
+    discount_type: Optional[DiscountType]
+    discount_value: Optional[float]
+
     class Config:
         from_attributes = True
 
@@ -15,6 +28,8 @@ class ShopProductResponse(BaseModel):
     description: Optional[str] = None
     price: Optional[int] = None
     image_url: Optional[str] = None
+    category_id: int
+    best_offer: Optional[ShopOfferRead] = None
     
     class Config:
         from_attributes = True
