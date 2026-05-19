@@ -1,3 +1,4 @@
+import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, or_
@@ -8,10 +9,13 @@ from app.api.v1.schemas.shop import PaginatedShopProductResponse, ShopProductDet
 from app.core.database import get_db
 from app.models.products import Product, ProductVariant
 from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer
+from app.utils.cache import get_cache, set_cache
 from app.utils.pagination import get_paginated_result
 
 
 shop_router = APIRouter(prefix="/shop", tags=['shop'])
+
+PRODUCT_CACHE_KEY = "products:list"
 
 # @shop_router.get("/",response_model=ShopResponse)
 # async def shop(
@@ -105,61 +109,109 @@ async def shop_products_list(
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Product).where(Product.is_active == True).order_by(Product.created_at.desc())
-
-    if search:
-        query = query.where(Product.name.ilike(f"%{search}%"))
-
-    if category_id is not None:
-        query = query.where(Product.category_id == category_id)
-
-    if is_featured is not None:
-        query = query.where(Product.is_featured == is_featured)
-
-    result = await db.execute(query.options(
-        selectinload(Product.variants).selectinload(ProductVariant.images)
-    ))
-    products = result.scalars().all()
     
-    # first get all active offers
-    offers = await get_all_active_offers(db)
-    
-    # Build indexes
-    item_map, category_map, store_offer, bogo_map = build_offer_indexes(offers)
-    
-    # 4. Attach best offer per product
-    # -------------------------
-    response = []
+    # check cache
+    cached_data = await get_cache(PRODUCT_CACHE_KEY)
 
-    for p in products:
-        best_offer = resolve_offer(
-            p,
-            item_map,
-            category_map,
-            store_offer,
-            bogo_map
+    if not cached_data:
+        query = select(Product).where(Product.is_active == True).order_by(Product.created_at.desc())
+
+        if search:
+            query = query.where(Product.name.ilike(f"%{search}%"))
+
+        if category_id is not None:
+            query = query.where(Product.category_id == category_id)
+
+        if is_featured is not None:
+            query = query.where(Product.is_featured == is_featured)
+
+        result = await db.execute(query.options(
+            selectinload(Product.variants).selectinload(ProductVariant.images)
+        ))
+        products = result.scalars().all()
+        
+        # first get all active offers
+        offers = await get_all_active_offers(db)
+        
+        # Build indexes
+        item_map, category_map, store_offer, bogo_map = build_offer_indexes(offers)
+        
+        # 4. Attach best offer per product
+        # -------------------------
+        response = []
+
+        for p in products:
+            best_offer = resolve_offer(
+                p,
+                item_map,
+                category_map,
+                store_offer,
+                bogo_map
+            )
+
+            response.append({
+                "id": p.id,
+                "name": p.name,
+                "description": p.description,
+                "is_featured": p.is_featured,
+                "price": p.variants[0].price if p.variants else 0,
+                "image": (
+                    p.variants[0].images[0].image_url
+                    if p.variants
+                    and p.variants[0].images
+                    else None
+                ),
+                "category_id": p.category_id,
+                "best_offer": {
+                    "id": best_offer.id,
+                    "name": best_offer.name,
+                    "code": best_offer.code,
+                    "type": best_offer.type,
+                    "discount_type": best_offer.discount_type,
+                    "discount_value":best_offer.discount_value
+                } if best_offer else None
+            })
+            
+        # save cache
+        await set_cache(
+            PRODUCT_CACHE_KEY,
+            json.dumps(response),
+            expire=900  # 15 mins
         )
-
-        response.append({
-            "id": p.id,
-            "name": p.name,
-            "description": p.description,
-            "price": p.variants[0].price if p.variants else 0,
-            "image": (
-                p.variants[0].images[0].image_url
-                if p.variants
-                and p.variants[0].images
-                else None
-            ),
-            "category_id": p.category_id,
-            "best_offer": best_offer
-        })
-
+        
+        return {
+            "total": len(products),
+            "skip": skip,
+            "limit": limit,
+            "data": response,
+        }
+    
+    # if cache exists with filters then
+    filtered = json.loads(cached_data)
+    if search:
+        filtered = [
+            p for p in filtered
+            if search.lower() in p["name"].lower()
+        ]
+    if category_id is not None:
+        filtered = [
+            p for p in filtered
+            if p["category_id"] == category_id
+        ]
+    if is_featured is not None:
+        filtered = [
+            p for p in filtered
+            if p.get("is_featured") == is_featured
+        ]
+    
+    #paginate and return
+    total = len(filtered)
+    paginated = filtered[skip: skip + limit]
     return {
-        "total": len(products),
+        "total": total,
         "skip": skip,
         "limit": limit,
-        "data": response,
+        "data": paginated,
     }
 
 

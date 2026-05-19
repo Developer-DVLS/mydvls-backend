@@ -27,6 +27,7 @@ class ShopProductResponse(BaseModel):
     name: str
     description: Optional[str] = None
     price: Optional[int] = None
+    is_featured: Optional[bool] = None
     image_url: Optional[str] = None
     category_id: int
     best_offer: Optional[ShopOfferRead] = None

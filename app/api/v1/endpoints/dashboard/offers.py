@@ -8,11 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.schemas.offers import  OfferBOGOResponse, OfferBOGOUpdate, OfferCreate, OfferResponse, OfferTargetResponse, OfferTargetUpdate, OfferUpdate, PaginatedOfferResponse
 from app.core.database import get_db
 from app.models.offers import Offer, OfferBOGO, OfferTarget, OfferType, TargetType
-from app.services.offerservice import validate_dates, validate_discount, validate_offer, validate_offer_conflict, validate_target_exists
+from app.services.offerservice import check_active_offer, validate_dates, validate_discount, validate_offer, validate_offer_conflict, validate_target_exists
+from app.utils.cache import delete_cache
 from app.utils.pagination import get_paginated_result
 
 
 offer_router = APIRouter(prefix="/dashboard/offer", tags=['Offer CRUD'])
+
+PRODUCT_CACHE_KEY = "products:list"
 
 @offer_router.post("/", response_model=OfferResponse)
 async def create_offer(
@@ -151,12 +154,14 @@ async def update_offer(
         )
     
     # validate offer fields
-    validate_dates(data.start_date, data.end_date)
-    validate_discount(data.discount_type, data.discount_value)
+    if data.start_date or data.end_date:
+        validate_dates(data.start_date or offer.start_date, data.end_date or offer.end_date)
+    if data.discount_type or data.discount_value:
+        validate_discount(data.discount_type or offer.discount_type, data.discount_value or offer.discount_value)
     
     
     # apply only provided fields
-    for field, value in data.items():
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(offer, field, value)
 
     await db.commit()
@@ -170,8 +175,13 @@ async def update_offer(
         )
         .where(Offer.id == offer.id)
     )
+    offer = result.scalars().first()
+    
+    # check if offer is active , if active then delete product list cache
+    if  await check_active_offer(db, offer):
+        await delete_cache(PRODUCT_CACHE_KEY)
 
-    return result.scalars().first()
+    return offer
 
 @offer_router.delete("/{offer_id:int}")
 async def delete_offer(
@@ -189,6 +199,10 @@ async def delete_offer(
             detail="Offer not found"
         )
     
+    # check if offer is active , if active then delete product list cache
+    if  await check_active_offer(db, offer):
+        await delete_cache(PRODUCT_CACHE_KEY)
+    
     await db.delete(offer)
     await db.commit()
 
@@ -203,7 +217,11 @@ async def update_target_type(
     data: OfferTargetUpdate,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(OfferTarget).where(OfferTarget.id == target_type_id))
+    result = await db.execute(
+        select(OfferTarget)
+        .options(OfferTarget.offer)
+        .where(OfferTarget.id == target_type_id)
+    )
     offer_target = result.scalars().first()
     if not offer_target:
         raise HTTPException(
@@ -225,21 +243,34 @@ async def update_target_type(
         select(OfferTarget)
         .where(OfferTarget.id == offer_target.id)
     )
+    offer_target = result.scalars().first()
+    
+    # check if offer is active , if active then delete product list cache
+    if  await check_active_offer(db, offer_target.offer):
+        await delete_cache(PRODUCT_CACHE_KEY)
 
-    return result.scalars().first()
+    return offer_target
 
 @offer_router.delete("/target-type/{target_type_id}")
 async def delete_target_type(
     target_type_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(OfferTarget).where(OfferTarget.id == target_type_id))
+    result = await db.execute(
+        select(OfferTarget)
+        .options(selectinload(OfferTarget.offer))
+        .where(OfferTarget.id == target_type_id)
+    )
     offer_target = result.scalars().first()
     if not offer_target:
         raise HTTPException(
             status_code=404,
             detail="OfferTarget not found"
         )
+    
+    # check if offer is active , if active then delete product list cache
+    if  await check_active_offer(db, offer_target.offer):
+        await delete_cache(PRODUCT_CACHE_KEY)
 
     await db.delete(offer_target)
     await db.commit()
@@ -255,7 +286,11 @@ async def update_offer_bogo(
     data: OfferBOGOUpdate,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(OfferBOGO).where(OfferBOGO.id == offer_bogo_id))
+    result = await db.execute(
+        select(OfferBOGO)
+        .options(selectinload(OfferBOGO.offer))
+        .where(OfferBOGO.id == offer_bogo_id)
+    )
     offer_bogo = result.scalars().first()
     if not offer_bogo:
         raise HTTPException(
@@ -274,21 +309,34 @@ async def update_offer_bogo(
         select(OfferBOGO)
         .where(Offer.id == offer_bogo.id)
     )
+    offer_bogo = result.scalars().first()
+    
+    # check if offer is active , if active then delete product list cache
+    if  await check_active_offer(db, offer_bogo.offer):
+        await delete_cache(PRODUCT_CACHE_KEY)
 
-    return result.scalars().first()
+    return offer_bogo
 
 @offer_router.delete("/offer-bogo/{offer_bogo_id}")
 async def delete_offer_bogo(
     offer_bogo_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(OfferBOGO).where(OfferBOGO.id == offer_bogo_id))
+    result = await db.execute(
+        select(OfferBOGO)
+        .options(selectinload(OfferBOGO.offer))
+        .where(OfferBOGO.id == offer_bogo_id)
+    )
     offer_bogo = result.scalars().first()
     if not offer_bogo:
         raise HTTPException(
             status_code=404,
             detail="OfferBOGO not found"
         )
+        
+    # check if offer is active , if active then delete product list cache
+    if  await check_active_offer(db, offer_bogo.offer):
+        await delete_cache(PRODUCT_CACHE_KEY)
     
     await db.delete(offer_bogo)
     await db.commit()

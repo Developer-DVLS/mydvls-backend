@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     AZURE_CONTAINER_NAME: str = os.getenv('AZURE_CONTAINER_NAME', '')
     AZURE_ACCOUNT_KEY: str = os.getenv('AZURE_ACCOUNT_KEY', '')
     
+    #redis
+    REDIS_URL: str = os.getenv('REDIS_URL', '')
     
     @property
     def tz(self):

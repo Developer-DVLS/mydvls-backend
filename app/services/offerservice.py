@@ -404,3 +404,22 @@ async def get_active_offer_by_item(db, item_id: int):
 
     # No offer found
     return None
+
+# check if offer is active 
+async def check_active_offer(db, offer):
+    query = (
+        select(Offer)
+        .where(
+            and_(
+                Offer.id ==offer.id,
+                Offer.start_date <= offer.end_date,
+                Offer.end_date >= offer.start_date,
+                Offer.is_active == True
+            )
+        )
+    )
+    result = await db.execute(query)
+    offer = result.scalars().first()
+    if offer:
+        return True
+    return False

@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
 
 from app.core.database import engine, Base
 from app import models
 from app.utils.create_superuser import create_superuser
+from app.core.redis import redis_client
 
 from app.models.user import User    
 from app.models.address import Address
@@ -17,11 +19,26 @@ from app.api.v1.endpoints.dashboard.productvariants import product_variant_route
 from app.api.v1.endpoints.dashboard.offers import offer_router
 from app.api.v1.endpoints.shop import shop_router
 
-app = FastAPI(
-    title="FastAPI App",
-    description="A FastAPI backend with PostgreSQL",
-    version="1.0.0",
-)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    health_check()
+    try:
+        await redis_client.ping()
+        print("Redis connected")
+    except Exception as e:
+        print("Redis connection failed:", e)
+
+    await create_superuser()
+    
+    yield
+
+    # shutdown
+    await redis_client.close()
+    print("Redis connection closed")
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -65,9 +82,3 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-
-
-@app.on_event("startup")
-async def startup_event():
-    # run only once
-    await create_superuser()
