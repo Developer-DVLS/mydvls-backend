@@ -4,7 +4,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.schemas.productvariants import PaginatedProductVariantResponse, ProductAttributeMini, ProductAttributeUpdate, ProductVariantRequest, ProductVariantResponse, ProductVariantUpdate
+from app.api.v1.schemas.productvariants import PaginatedProductVariantResponse, ProductAttributeCreate, ProductAttributeMini, ProductAttributeRequest, ProductAttributeResponse, ProductAttributeUpdate, ProductVariantRequest, ProductVariantResponse, ProductVariantUpdate
 from app.core.database import get_db
 from app.models.products import Product, ProductAttribute, ProductVariant, ProductVariantImage
 from app.models.user import User
@@ -92,7 +92,7 @@ async def create_variant(
     
     # check if sku already exists
     sku_exists_result = await db.execute(
-        select(ProductVariant).where(ProductVariant.sku == data.sku)
+        select(ProductVariant).where(ProductVariant.sku == data.sku.lower())
     )
     sku_exists = sku_exists_result.scalars().first()
     
@@ -260,6 +260,23 @@ async def delete_image(
     
     
 # product attribute 
+@admin_variant_router.post('/attribute/', response_model=ProductAttributeResponse)
+async def create_attribute(
+    data: ProductAttributeCreate,
+    current_user: User = Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+):
+    attribute = ProductAttribute(
+        variant_id = data.variant_id,
+        key = data.key,
+        value = data.value
+    )
+
+    db.add(attribute)
+    await db.commit()
+
+    return attribute
+
 @admin_variant_router.patch('/attribute/{attribute_id}/', response_model=ProductAttributeMini)
 async def update_attribute(
     attribute_id: int,

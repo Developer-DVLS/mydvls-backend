@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
 from datetime import datetime
 
@@ -13,6 +13,11 @@ class ProductVariantBase(BaseModel):
     is_active: bool = True
     is_featured: bool = False
     
+    @field_validator("sku")
+    @classmethod
+    def normalize_sku(cls, v: str):
+        return v.strip().lower().replace(" ", "-")
+    
 class ProductVariantImageBase(BaseModel):
     image_url: str
 
@@ -26,7 +31,20 @@ class ProductVariantImageResponse(ProductVariantImageBase):
 class ProductAttributeRequest(BaseModel):
     key: str
     value: str
+
+class ProductAttributeCreate(BaseModel):
+    variant_id: int
+    key: str
+    value: str
+
+class ProductAttributeResponse(ProductAttributeCreate):
+    id: int
+    created_at: datetime
+    updated_at: datetime
     
+    class Config:
+        from_attributes = True
+        
 class ProductAttributeUpdate(BaseModel):
     key: Optional[str] = None
     value: Optional[str] = None
