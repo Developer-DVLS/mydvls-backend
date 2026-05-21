@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.models.user import User, UserRole, UserStatus
 from app.services.security import authenticate_user, create_access_token, create_email_verification_token, create_refresh_token, decode_access_token, get_current_user, get_refresh_token_from_cookie, hash_password, verify_password
 from app.utils.send_email import send_email
+from app.services.cartservice import CartService
 
 
 user_router = APIRouter(prefix="/users", tags=['User auth'])
@@ -133,6 +134,7 @@ async def verify_email(token: str, background_tasks: BackgroundTasks, db: AsyncS
 @user_router.post("/login/")
 async def login(
         response: Response,
+        request: Request,
         form_data: OAuth2PasswordRequestForm = Depends(),
         db_session: AsyncSession = Depends(get_db)):
     
@@ -158,8 +160,8 @@ async def login(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Incorrect email or password")
     
-    if not (user.is_email_verified and user.is_active):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email/Account not verified")
+    # if not (user.is_email_verified and user.is_active):
+    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email/Account not verified")
     
 
     # create token based on login identifier instead of static username/email
@@ -173,6 +175,10 @@ async def login(
                         httponly=False, samesite="none", secure=True, max_age=86400, )
     response.set_cookie(key="refresh_token", value=refresh_token,
                         httponly=False, samesite="none", secure=True, max_age=86400, )
+    
+    # sync session cart
+    cart_service = CartService()
+    await cart_service.cart_sync_on_login(request, response, db_session, user.id)
 
     login_response = UserLoginResponseSchema.model_validate(user)
 

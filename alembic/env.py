@@ -12,6 +12,7 @@ from app.models.address import Address
 from app.models.media import Media
 from app.models.products import (ProductCategory, Product, ProductVariant, ProductAttribute, ProductVariantImage)
 from app.models.offers import (Offer, OfferTarget, OfferBOGO)
+from app.models.carts import (Cart, CartProduct)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

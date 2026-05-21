@@ -18,6 +18,7 @@ from app.api.v1.endpoints.dashboard.products import product_router, admin_produc
 from app.api.v1.endpoints.dashboard.productvariants import product_variant_router, admin_variant_router
 from app.api.v1.endpoints.dashboard.offers import offer_router
 from app.api.v1.endpoints.shop import shop_router
+from app.api.v1.endpoints.cart import cart_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -53,6 +54,7 @@ app.include_router(product_variant_router)
 app.include_router(admin_variant_router)
 app.include_router(shop_router)
 app.include_router(offer_router)
+app.include_router(cart_router)
 
 
 # =========================

@@ -114,3 +114,26 @@ async def get_current_user(token: str = Depends(get_token_from_cookie), db_sessi
     user: User = result.scalar_one_or_none()
 
     return user
+
+async def get_current_user_optional(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        token = request.cookies.get("access_token")
+        if not token:
+            return None
+        
+        credentials_exception = HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials",
+                                          headers={"WWW-Authenticate": "Bearer"})
+
+        email = await verify_access_token(token, credentials_exception=credentials_exception)
+
+        result = await db.execute(
+            select(User).where(User.email == email)
+        )
+
+        return result.scalar_one_or_none()
+
+    except:
+        return None

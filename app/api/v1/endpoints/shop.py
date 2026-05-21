@@ -154,7 +154,7 @@ async def shop_products_list(
                 "name": p.name,
                 "description": p.description,
                 "is_featured": p.is_featured,
-                "price": p.variants[0].price if p.variants else 0,
+                "price": str(p.variants[0].price )if p.variants else 0,
                 "image": (
                     p.variants[0].images[0].image_url
                     if p.variants

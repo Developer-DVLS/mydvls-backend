@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Text, DateTime, Float
+from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, Boolean, Text, DateTime, Float
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 
@@ -58,9 +58,9 @@ class ProductVariant(Base):
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), index=True)
     sku = Column(String, unique=True, index=True)
-    price = Column(Float, default=0.00)
-    cost_price = Column(Float, default=0.00)
-    margin = Column(Float, default=0.00)
+    price = Column(Numeric(10, 2), default=0.00, nullable=False)
+    cost_price = Column(Numeric(10, 2), default=0.00, nullable=False)
+    margin = Column(Numeric(10, 2), default=0.00, nullable=False)
     stock_quantity = Column(Integer, default=0)
     is_active = Column(Boolean, default=True, index=True)
     is_featured = Column(Boolean, default=False)
