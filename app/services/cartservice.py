@@ -1,13 +1,14 @@
+from datetime import datetime
 import json
 import uuid
 from fastapi import HTTPException, Request, Response
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.schemas.carts import CartProductResponse, CartResponse, ProductResponse
 from app.models.carts import Cart, CartProduct, CartStatus
-from app.models.offers import DiscountType
+from app.models.offers import DiscountType, Offer, OfferType
 from app.models.products import Product, ProductVariant
 from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer
 from app.utils.cache import delete_cache, get_cache, set_cache
@@ -416,7 +417,7 @@ class CartService:
     # Calculate offers and totals
     # ======================================================
     
-    async def enrich_cart(self, db, cart):
+    async def enrich_cart(self, db, cart, coupon_code):
         # normalize
         cart = CartResponse(**cart) if isinstance(cart, dict) else cart
 
@@ -467,6 +468,11 @@ class CartService:
         
         # total cart totals
         cart = self.calculate_cart_total(cart)
+
+        # coupon validation
+        if coupon_code:
+            cart = await self.coupon_validation(db, cart, coupon_code)
+
         return cart
     
         cart.discount_amount = discount_amount
@@ -486,9 +492,9 @@ class CartService:
         cart.discounted_amount = discounted_amount
         
         #calculate total
-        total = subtotal - discount_amount
+        total_amount = subtotal - discount_amount
         
-        cart.total_amount = total
+        cart.total_amount = total_amount
         
         return cart
         
@@ -564,3 +570,67 @@ class CartService:
     
     def calculate_product_discounted_amount(self, subtotal, discount_amount):
         return subtotal - discount_amount
+    
+    # ======================================================
+    # COUPON
+    # ======================================================
+    ## TODO: usage limit validations
+
+    #calculate coupon discount
+    def calculate_coupon_discount_amount(self, offer, subtotal):
+        discount_amount = 0
+        if offer.discount_type == DiscountType.PERCENTAGE:
+            discount_amount = (offer.discount_value / 100) * subtotal
+        elif offer.discount_type == DiscountType.FLAT:
+            discount_amount = offer.discount_value
+        
+        return discount_amount
+    
+    #coupon validation
+    async def coupon_validation(self, db, cart, coupon_code):
+        now = datetime.utcnow()
+        
+        # get coupon with this coupon code
+        result = await db.execute(
+            select(Offer)
+            .where(
+                Offer.type == OfferType.COUPON,
+                Offer.code == coupon_code,
+                Offer.is_active == True,
+                Offer.start_date <= now,
+                Offer.end_date >= now,
+            )
+
+        )
+        coupon_offer = result.scalars().first()
+        
+        if not coupon_offer:
+            cart.coupon_applied = False
+            cart.coupon_applicable = False
+            cart.coupon_message = "Invalid coupon code."
+
+            return cart
+        
+        # minimum spent amount validation
+        if cart.subtotal < coupon_offer.min_spent_amount:
+            cart.coupon_applied = False
+            cart.coupon_applicable = False
+            cart.coupon_message = f"Minimum spent amount must be above ${coupon_offer.min_spent_amount}"
+            
+            return cart
+        
+        #calculate coupon discount
+        coupon_discount_amount = self.calculate_coupon_discount_amount(coupon_offer, cart.subtotal)
+        
+        # maximum discount amount validation
+        if coupon_discount_amount > coupon_offer.max_discount_amount:
+            coupon_discount_amount = coupon_offer.max_discount_amount
+        
+        cart.coupon_applied = True
+        cart.coupon_applicable = True
+        cart.coupon_message = "Coupon applied."
+        cart.coupon_discount_amount = coupon_discount_amount
+        
+        cart.total_amount = cart.total_amount - coupon_discount_amount
+            
+        return cart

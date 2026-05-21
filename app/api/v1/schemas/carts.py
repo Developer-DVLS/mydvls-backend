@@ -67,6 +67,10 @@ class CartResponse(BaseModel):
     discount_amount: Optional[int] = 0
     discounted_amount: Optional[int] = 0
     total_amount: Optional[int] = 0
+    coupon_applied: Optional[bool] = False
+    coupon_applicable: Optional[bool] = None
+    coupon_message: Optional[str] = None
+    coupon_discount_amount: Optional[int] = 0
     
     class Config:
         from_attributes = True

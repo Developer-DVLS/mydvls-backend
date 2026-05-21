@@ -1,14 +1,10 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, Response
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.schemas.carts import CartResponse
 from app.core.database import get_db
-from app.models.products import Product, ProductVariant
 from app.services.cartservice import CartService
-from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer
 from app.services.security import get_current_user_optional
 
 cart_router = APIRouter(prefix="/cart", tags=["Cart"])
@@ -19,15 +15,17 @@ cart_service = CartService()
 async def get_cart(
     request: Request,
     cart_count: Optional[bool] = False,
+    coupon_code: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     user = Depends(get_current_user_optional)
 ):
     user_id = user.id if user else None
     
-    ## to get cart count
+    # to get cart count
     if cart_count:
         return {"cart_count" : await cart_service.cart_count(request=request, db=db, user_id=user_id)}
-    
+        
+    # get cart from session / db
     cart = await cart_service.get_cart(
         request=request,
         db=db,
@@ -37,7 +35,8 @@ async def get_cart(
     # calculate totals    
     enriched_cart = await cart_service.enrich_cart(
         db=db,
-        cart=cart
+        cart=cart,
+        coupon_code=coupon_code
     )
 
     return enriched_cart

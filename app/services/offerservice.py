@@ -60,8 +60,9 @@ async def validate_offer_conflict(
                 )
         
         # check if the target_ids exists in db
-        for target in targets:
-            await validate_target_exists(db, target)
+        if offer_type in (OfferType.ITEM, OfferType.CATEGORY):
+            for target in targets:
+                await validate_target_exists(db, target)
 
     # CASE 2: offers WITHOUT targets (STORE / GLOBAL OFFERS)
     else:
@@ -91,7 +92,7 @@ async def validate_offer_conflict(
 
 async def validate_target_exists(db, target, target_id=None):
     actual_target_id = target_id or target.target_id
-    print("actual_target_id!!!!!", actual_target_id, target_id, target.target_id)
+
     if target.target_type == TargetType.ITEM:
         result = await db.execute(
             select(Product.id).where(Product.id == actual_target_id)
