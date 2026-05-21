@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
+from app.core.config import settings
 from app.core.database import engine, Base
 from app import models
 from app.utils.create_superuser import create_superuser
@@ -62,7 +63,7 @@ app.include_router(cart_router)
 # =========================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # change in production
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
