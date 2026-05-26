@@ -24,34 +24,51 @@ class VariantImageResponse(BaseModel):
 class ProductVariantResponse(BaseModel):
     id: int
     sku: str
-    price: int
+    price: float
+    product_id: int
     product: ProductResponse
     # images: VariantImageResponse
     
     class Config:
         from_attributes = True
+        
+class CartBOGOMeta(BaseModel):
+    id: int
+    buy_item_id: int
+    buy_quantity: int
+    get_item_id: Optional[int] = None
+    get_quantity: int
+    apply_to_same_item: bool = True
 
 class CartOfferResponse(BaseModel):
     id: int
     name: str
     code: str
     type: OfferType
-    discount_type: Optional[DiscountType]
-    discount_value: Optional[float]
+    discount_type: Optional[DiscountType] = None
+    discount_value: Optional[float] = 0
+    bogo_meta: Optional[CartBOGOMeta] = None
 
     class Config:
         from_attributes = True
-        
+
+class CartBOGOFreeItem(BaseModel):
+    product_variant_id: int
+    quantity: int
+    unit_price: Optional[float] = 0
+    # product_variant: Optional[ProductVariantResponse] = None
+    
 class CartProductResponse(BaseModel):
     id: int
     product_variant_id: int
     quantity: int
-    unit_price: int
+    unit_price: float
     product_variant: Optional[ProductVariantResponse] = None
     offer: Optional[CartOfferResponse] = None
-    subtotal: Optional[int] = 0
-    discount_amount: Optional[int] = 0
-    discounted_amount: Optional[int] = 0
+    bogo_free_item: Optional[CartBOGOFreeItem] = None
+    subtotal: Optional[float] = 0
+    discount_amount: Optional[float] = 0
+    discounted_amount: Optional[float] = 0
     # created_at: datetime
     # updated_at: datetime
     
@@ -63,14 +80,14 @@ class CartResponse(BaseModel):
     user_id: Optional[UUID] = None
     status: CartStatus
     cart_products: Optional[List[CartProductResponse]] = None
-    subtotal: Optional[int] = 0
-    discount_amount: Optional[int] = 0
-    discounted_amount: Optional[int] = 0
-    total_amount: Optional[int] = 0
+    subtotal: Optional[float] = 0
+    discount_amount: Optional[float] = 0
+    discounted_amount: Optional[float] = 0
+    total_amount: Optional[float] = 0
     coupon_applied: Optional[bool] = False
     coupon_applicable: Optional[bool] = None
     coupon_message: Optional[str] = None
-    coupon_discount_amount: Optional[int] = 0
+    coupon_discount_amount: Optional[float] = 0
     
     class Config:
         from_attributes = True

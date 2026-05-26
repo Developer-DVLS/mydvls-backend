@@ -11,13 +11,22 @@ class ShopCategoryResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class ShopBOGOMeta(BaseModel):
+    id: int
+    buy_item_id: int
+    buy_quantity: int
+    get_item_id: Optional[int] = None
+    get_quantity: int
+    apply_to_same_item: bool = True
+
 class ShopOfferRead(BaseModel):
     id: int
     name: str
     code: str
     type: OfferType
-    discount_type: Optional[DiscountType]
-    discount_value: Optional[float]
+    discount_type: Optional[DiscountType] = None
+    discount_value: Optional[float] = 0
+    bogo_meta: Optional[ShopBOGOMeta] = None
 
     class Config:
         from_attributes = True

@@ -67,16 +67,16 @@ async def create_offer(
 
         # create bogo meta
         if data.type == OfferType.BOGO and data.bogo_meta:
-            for meta in data.bogo_meta:
-                db.add(
-                    OfferBOGO(
-                        offer_id=offer.id,
-                        buy_quantity=meta.buy_quantity,
-                        get_quantity=meta.get_quantity,
-                        apply_to_same_item=meta.apply_to_same_item,
-                        get_item_id=meta.get_item_id,
-                    )
+            db.add(
+                OfferBOGO(
+                    offer_id=offer.id,
+                    buy_item_id=data.bogo_meta.buy_item_id,
+                    buy_quantity=data.bogo_meta.buy_quantity,
+                    get_quantity=data.bogo_meta.get_quantity,
+                    apply_to_same_item=data.bogo_meta.apply_to_same_item,
+                    get_item_id=data.bogo_meta.get_item_id,
                 )
+            )
         await db.commit() 
     except Exception:
         await db.rollback()
@@ -299,7 +299,7 @@ async def update_offer_bogo(
         )
     
     # apply only provided fields
-    for field, value in data.items():
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(offer_bogo, field, value)
 
     await db.commit()
@@ -307,7 +307,7 @@ async def update_offer_bogo(
     
     result = await db.execute(
         select(OfferBOGO)
-        .where(Offer.id == offer_bogo.id)
+        .where(OfferBOGO.id == offer_bogo.id)
     )
     offer_bogo = result.scalars().first()
     

@@ -6,7 +6,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.carts import CartProductResponse, CartResponse, ProductResponse
+from app.api.v1.schemas.carts import CartBOGOFreeItem, CartProductResponse, CartResponse, ProductResponse, ProductVariantResponse
 from app.models.carts import Cart, CartProduct, CartStatus
 from app.models.offers import DiscountType, Offer, OfferType
 from app.models.products import Product, ProductVariant
@@ -181,7 +181,9 @@ class CartService:
             key=self.SESSION_COOKIE_KEY,
             value=redis_cache_key,
             httponly=True,
-            max_age=self.GUEST_CART_EXPIRY
+            max_age=self.GUEST_CART_EXPIRY,
+            secure=True, 
+            samesite="none"
         )
         return cart
     
@@ -429,42 +431,70 @@ class CartService:
         # first get all active offers
         offers = await get_all_active_offers(db)
         if offers:
-            item_map, category_map, store_offer, bogo_map = build_offer_indexes(offers)
-
+            bogo_map, item_map, category_map, store_offer = build_offer_indexes(offers)
+            
             # apply offers
             for cart_product in cart.cart_products:
                 if not cart_product.product_variant:
                     continue
-                product = (
-                    ProductResponse(**cart_product.product_variant["product"])
+                product_variant = (
+                    ProductVariantResponse(**cart_product.product_variant)
                     if isinstance(cart_product.product_variant, dict)
-                    else cart_product.product_variant.product
+                    else cart_product.product_variant
                 )
                 
                 cart_product_response = await self._attach_offer(
                     db,
                     cart_product,
-                    product,
+                    product_variant,
                     item_map,
                     category_map,
                     store_offer,
                     bogo_map
                 )
-            
-                # calculate discount amount
-                discount_amount = self.calculate_product_discount_amount(
-                    cart_product_response.offer, 
-                    cart_product.product_variant.price,
-                    cart_product.quantity
-                    )
-                cart_product_response.discount_amount = discount_amount
                 
-                #calculate discounted amount
-                discounted_amount = self.calculate_product_discounted_amount(
-                    cart_product.subtotal,
-                    discount_amount
-                )
-                cart_product_response.discounted_amount = discounted_amount
+                # if offer type in item,category or store then calculate for discount amount and discounted amount
+                if cart_product_response.offer.type in (OfferType.ITEM, OfferType.CATEGORY, OfferType.STORE):
+                    # calculate discount amount
+                    discount_amount = self.calculate_product_discount_amount(
+                        cart_product_response.offer, 
+                        cart_product.product_variant.price,
+                        cart_product.quantity
+                        )
+                    cart_product_response.discount_amount = discount_amount
+                    
+                    #calculate discounted amount
+                    discounted_amount = self.calculate_product_discounted_amount(
+                        cart_product.subtotal,
+                        discount_amount
+                    )
+                    cart_product_response.discounted_amount = discounted_amount
+                # handle bogo offer accordingly
+                elif cart_product_response.offer.type == OfferType.BOGO:
+                    if cart_product_response.offer.bogo_meta.apply_to_same_item:
+                        response = self.calculate_same_item_bogo(
+                            cart_product_response.offer,
+                            cart_product_response
+                            )
+                        if response["free_items"] > 0:
+                            cart_product_response.bogo_free_item = CartBOGOFreeItem(
+                                product_variant_id=response["get_item_id"],
+                                quantity=response["free_items"],
+                                unit_price=0 
+                            )
+                    else:
+                        response = self.calculate_cross_item_bogo(
+                            cart_product_response.offer,
+                            cart_product_response
+                        )
+                        
+                        if response["free_items"] > 0:
+                            cart_product_response.bogo_free_item =  CartBOGOFreeItem(
+                                product_variant_id=response["get_item_id"],
+                                quantity=response["free_items"],
+                                unit_price=0 
+                            )
+
         
         # total cart totals
         cart = self.calculate_cart_total(cart)
@@ -540,20 +570,20 @@ class CartService:
         self,
         db,
         cart_product,
-        product,
+        product_variant,
         item_map,
         category_map,
         store_offer,
         bogo_map
     ):        
         best_offer = resolve_offer(
-            product,
+            product_variant,
             item_map,
             category_map,
             store_offer,
             bogo_map
         )
-        
+                
         # attach object directly
         cart_product.offer = best_offer
         return cart_product
@@ -634,3 +664,80 @@ class CartService:
         cart.total_amount = cart.total_amount - coupon_discount_amount
             
         return cart
+    
+    # ======================================================
+    # BOGO OFFER
+    # ======================================================
+    def calculate_same_item_bogo(self, offer, cart_product_response):
+    
+        bogo = offer.bogo_meta
+
+        # 1. Get cart item (same product for buy + get)
+        item = cart_product_response.offer.bogo_meta.buy_item_id
+
+        # 2. Safety check
+        if not item:
+            return {
+                "free_items": 0,
+                "discount": 0,
+                "payable_quantity": 0,
+                "buy_item_id": bogo.buy_item_id,
+                "get_item_id": bogo.get_item_id
+            }
+
+        # 3. Total quantity in cart
+        quantity = cart_product_response.quantity
+        unit_price = float(cart_product_response.unit_price)
+
+        # 4. Eligible sets
+        eligible_sets = quantity // bogo.buy_quantity
+
+        # 5. Free items
+        free_items = eligible_sets * bogo.get_quantity
+
+        # 6. Discount value
+        discount = free_items * unit_price
+
+        # 7. Payable quantity
+        payable_quantity = quantity - free_items
+
+        return {
+            "free_items": free_items,
+            "discount": discount,
+            "payable_quantity": payable_quantity,
+            "buy_item_id": bogo.buy_item_id,
+            "get_item_id": bogo.get_item_id
+        }
+        
+    def calculate_cross_item_bogo(self, offer, cart_product_response):
+        bogo = offer.bogo_meta
+        
+        buy_item = cart_product_response.offer.bogo_meta.buy_item_id 
+        get_item = cart_product_response.offer.bogo_meta.get_item_id
+        
+        if not buy_item or not get_item:
+            return {
+                "free_items": 0,
+                "discount": 0,
+                "buy_item_id": bogo.buy_item_id,
+                "get_item_id": bogo.get_item_id
+        } 
+
+        # 3. Calculate eligible BOGO sets
+        eligible_sets = buy_item.quantity // bogo.buy_quantity
+
+        # 4. Total eligible free quantity from offer
+        eligible_free_qty = eligible_sets * bogo.get_quantity
+
+        # 5. Cap by actual cart quantity of get item
+        free_qty = min(get_item.quantity, eligible_free_qty)
+
+        # 6. Calculate discount value (important for totals)
+        discount = float(get_item.unit_price) * free_qty
+
+        return {
+            "free_items": free_qty,
+            "discount": discount,
+            "buy_item_id": bogo.buy_item_id,
+            "get_item_id": bogo.get_item_id
+        }

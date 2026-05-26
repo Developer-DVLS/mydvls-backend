@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.v1.schemas.shop import PaginatedShopProductResponse, ShopProductDetailResponse
 from app.core.database import get_db
+from app.models.offers import OfferType
 from app.models.products import Product, ProductVariant
 from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer
 from app.utils.cache import get_cache, set_cache
@@ -148,6 +149,32 @@ async def shop_products_list(
                 store_offer,
                 bogo_map
             )
+            best_offer_data = None
+            if best_offer:
+                if best_offer.type in (OfferType.ITEM, OfferType.CATEGORY, OfferType.STORE):
+                    best_offer_data = {
+                        "id": best_offer.id,
+                        "name": best_offer.name,
+                        "code": best_offer.code,
+                        "type": best_offer.type,
+                        "discount_type": best_offer.discount_type,
+                        "discount_value":best_offer.discount_value
+                    } 
+                elif best_offer.type == OfferType.BOGO:
+                    best_offer_data = {
+                        "id": best_offer.id,
+                        "name": best_offer.name,
+                        "code": best_offer.code,
+                        "type": best_offer.type,
+                        "bogo_meta": {
+                            "id": best_offer.bogo_meta.id,
+                            "apply_to_same_item": best_offer.bogo_meta.apply_to_same_item,
+                            "buy_quantity": best_offer.bogo_meta.buy_quantity,
+                            "buy_item_id": best_offer.bogo_meta.buy_item_id,
+                            "get_quantity": best_offer.bogo_meta.get_quantity,
+                            "get_item_id": best_offer.bogo_meta.get_item_id,
+                        }
+                    }
 
             response.append({
                 "id": p.id,
@@ -162,14 +189,7 @@ async def shop_products_list(
                     else None
                 ),
                 "category_id": p.category_id,
-                "best_offer": {
-                    "id": best_offer.id,
-                    "name": best_offer.name,
-                    "code": best_offer.code,
-                    "type": best_offer.type,
-                    "discount_type": best_offer.discount_type,
-                    "discount_value":best_offer.discount_value
-                } if best_offer else None
+                "best_offer": best_offer_data
             })
             
         # save cache

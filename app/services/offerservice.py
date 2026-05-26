@@ -148,17 +148,18 @@ def validate_dates(start_date, end_date):
 
 # offer values validation
 def validate_discount(discount_type, discount_value):
-    if discount_value < 0:
-        raise HTTPException(
-            status_code=400,
-            detail="discount_value cannot be negative"
-        )
+    if discount_type and discount_value:
+        if discount_value < 0:
+            raise HTTPException(
+                status_code=400,
+                detail="discount_value cannot be negative"
+            )
 
-    if discount_type == "percentage" and discount_value > 100:
-        raise HTTPException(
-            status_code=400,
-            detail="percentage discount cannot exceed 100"
-        )
+        if discount_type == "percentage" and discount_value > 100:
+            raise HTTPException(
+                status_code=400,
+                detail="percentage discount cannot exceed 100"
+            )
 
 def validate_target_type_with_offer_type(type, targets):
      # validate target consistency BEFORE DB
@@ -231,31 +232,32 @@ def build_offer_indexes(offers):
         # BOGO
         if offer.type == OfferType.BOGO and offer.bogo_meta:
             bogo_map[offer.bogo_meta.buy_item_id] = offer
-
-    return item_map, category_map, store_offer, bogo_map
+    
+    return bogo_map, item_map, category_map, store_offer
 
 # Resolve BEST OFFER per product (priority rules)
 def resolve_offer(
-    product,
+    product_variant,
     item_map,
     category_map,
     store_offer,
     bogo_map
 ):
-    # 1. ITEM (highest priority)
-    if product.id in item_map:
-        return item_map[product.id]
+    # 1. BOGO (highest priority)
+    if bogo_map and product_variant.id in bogo_map:
+        return bogo_map.get(product_variant.id)
+    
+    # 2. ITEM
+    if product_variant.product_id in item_map:
+        return item_map[product_variant.product_id]
 
-    # 2. CATEGORY
-    if product.category_id in category_map:
-        return category_map[product.category_id]
+    # 3. CATEGORY
+    if product_variant.product.category_id in category_map:
+        return category_map[product_variant.product.category_id]
 
-    # 3. STORE
+    # 4. STORE (lowest)
     if store_offer:
         return store_offer
-
-    # 4. BOGO (lowest)
-    return bogo_map.get(product.id)
 
 # get active offer based on item 
 # the priorirty of offers based on types: 
