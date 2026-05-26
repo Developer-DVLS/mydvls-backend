@@ -82,6 +82,8 @@ class ShopProductVariant(BaseModel):
     images: Optional[List[ShopImageMini]] = None
     attributes: Optional[List[ShopProductAttribute]] = None
     
+    best_offer: Optional[ShopOfferRead] = None
+    
     class Config:
         from_attributes = True
     

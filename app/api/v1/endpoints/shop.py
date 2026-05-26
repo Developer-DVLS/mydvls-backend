@@ -143,7 +143,7 @@ async def shop_products_list(
 
         for p in products:
             best_offer = resolve_offer(
-                p,
+                p.variants[0],
                 item_map,
                 category_map,
                 store_offer,
@@ -257,5 +257,51 @@ async def product_detail(
     result = query.scalars().first()
     if not result:
         raise HTTPException(status_code=404, detail="Product not found")
+    
+    # first get all active offers
+    offers = await get_all_active_offers(db)
+    
+    if offers:
+        # Build indexes
+        item_map, category_map, store_offer, bogo_map = build_offer_indexes(offers)
+        
+        for variant in result.variants:
+            
+            best_offer = resolve_offer(
+                variant,
+                item_map,
+                category_map,
+                store_offer,
+                bogo_map
+            )
+            
+            best_offer_data = None
+            if best_offer:
+                if best_offer.type in (OfferType.ITEM, OfferType.CATEGORY, OfferType.STORE):
+                    best_offer_data = {
+                        "id": best_offer.id,
+                        "name": best_offer.name,
+                        "code": best_offer.code,
+                        "type": best_offer.type,
+                        "discount_type": best_offer.discount_type,
+                        "discount_value":best_offer.discount_value
+                    } 
+                elif best_offer.type == OfferType.BOGO:
+                    best_offer_data = {
+                        "id": best_offer.id,
+                        "name": best_offer.name,
+                        "code": best_offer.code,
+                        "type": best_offer.type,
+                        "bogo_meta": {
+                            "id": best_offer.bogo_meta.id,
+                            "apply_to_same_item": best_offer.bogo_meta.apply_to_same_item,
+                            "buy_quantity": best_offer.bogo_meta.buy_quantity,
+                            "buy_item_id": best_offer.bogo_meta.buy_item_id,
+                            "get_quantity": best_offer.bogo_meta.get_quantity,
+                            "get_item_id": best_offer.bogo_meta.get_item_id,
+                        }
+                    }
+        
+        variant.best_offer = best_offer_data
     
     return result
