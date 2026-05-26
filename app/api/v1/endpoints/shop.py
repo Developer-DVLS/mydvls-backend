@@ -302,6 +302,6 @@ async def product_detail(
                         }
                     }
         
-        variant.best_offer = best_offer_data
+            variant.best_offer = best_offer_data
     
     return result
