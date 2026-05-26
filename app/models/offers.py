@@ -99,9 +99,11 @@ class OfferBOGO(Base):
     OfferBOGO model
     
     Stores configuration details for Buy-One-Get-One (BOGO) type offers.
-    his model defines the rule-based logic for BOGO promotions linked to an Offer.
+    This model defines the rule-based logic for BOGO promotions linked to an Offer.
     It specifies the required quantity a customer must purchase (buy_quantity)
     and the quantity or item they will receive as a benefit (get_quantity).
+    
+    BOGO offer is attached to product-variant; buy_item_id and get_item_id refers to product-variant-id.
     
     Optionally, it can define a specific item (get_item_id) that is rewarded,
     allowing flexibility for both same-item and cross-item BOGO promotions.

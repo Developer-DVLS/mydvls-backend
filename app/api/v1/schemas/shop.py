@@ -11,6 +11,23 @@ class ShopCategoryResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class BOGOGetItemProduct(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+    
+class BOGOGetItem(BaseModel):
+    id: int
+    sku: str
+    price: float = 0.0
+    product: BOGOGetItemProduct
+    
+    class Config:
+        from_attributes = True
+
 class ShopBOGOMeta(BaseModel):
     id: int
     buy_item_id: int
@@ -18,6 +35,7 @@ class ShopBOGOMeta(BaseModel):
     get_item_id: Optional[int] = None
     get_quantity: int
     apply_to_same_item: bool = True
+    get_item: BOGOGetItem
 
 class ShopOfferRead(BaseModel):
     id: int

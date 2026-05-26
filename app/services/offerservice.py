@@ -245,7 +245,7 @@ def resolve_offer(
 ):
     # 1. BOGO (highest priority)
     if bogo_map and product_variant.id in bogo_map:
-        return bogo_map.get(product_variant.id)
+        return bogo_map[product_variant.id]
     
     # 2. ITEM
     if product_variant.product_id in item_map:

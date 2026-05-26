@@ -4,7 +4,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.schemas.productvariants import PaginatedProductVariantResponse, ProductAttributeCreate, ProductAttributeMini, ProductAttributeRequest, ProductAttributeResponse, ProductAttributeUpdate, ProductVariantRequest, ProductVariantResponse, ProductVariantUpdate
+from app.api.v1.schemas.productvariants import CreateProductVariantImage, PaginatedProductVariantResponse, ProductAttributeCreate, ProductAttributeMini, ProductAttributeRequest, ProductAttributeResponse, ProductAttributeUpdate, ProductVariantImageBase, ProductVariantImageResponse, ProductVariantRequest, ProductVariantResponse, ProductVariantUpdate
 from app.core.database import get_db
 from app.models.products import Product, ProductAttribute, ProductVariant, ProductVariantImage
 from app.models.user import User
@@ -233,6 +233,24 @@ async def delete_variant(
         "status": True,
         "message": "Variant deleted successfully"
     }
+
+# add product variant image
+@admin_variant_router.post('/image/', response_model=ProductVariantImageResponse)
+async def create_image(
+    data: CreateProductVariantImage,
+    current_user: User = Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+):
+    
+    image = ProductVariantImage(
+        variant_id = data.variant_id,
+        image_url = data.image_url
+    )
+
+    db.add(image)
+    await db.commit()
+
+    return image
     
 
 # delete variant image 

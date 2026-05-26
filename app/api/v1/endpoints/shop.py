@@ -10,6 +10,7 @@ from app.core.database import get_db
 from app.models.offers import OfferType
 from app.models.products import Product, ProductVariant
 from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer
+from app.services.shopservice import ShopService
 from app.utils.cache import get_cache, set_cache
 from app.utils.pagination import get_paginated_result
 
@@ -17,6 +18,8 @@ from app.utils.pagination import get_paginated_result
 shop_router = APIRouter(prefix="/shop", tags=['shop'])
 
 PRODUCT_CACHE_KEY = "products:list"
+
+shop_service = ShopService()
 
 # @shop_router.get("/",response_model=ShopResponse)
 # async def shop(
@@ -135,45 +138,32 @@ async def shop_products_list(
         offers = await get_all_active_offers(db)
         
         # Build indexes
-        item_map, category_map, store_offer, bogo_map = build_offer_indexes(offers)
-        
+        bogo_map, item_map, category_map, store_offer = build_offer_indexes(offers)
+
         # 4. Attach best offer per product
         # -------------------------
         response = []
 
         for p in products:
-            best_offer = resolve_offer(
-                p.variants[0],
+            
+            applicable_offer = shop_service.collect_applicable_offers( 
+                p,
                 item_map,
                 category_map,
-                store_offer,
-                bogo_map
+                store_offer
             )
+            
+            best_offer = shop_service.pick_best_offer(applicable_offer)
+
             best_offer_data = None
             if best_offer:
-                if best_offer.type in (OfferType.ITEM, OfferType.CATEGORY, OfferType.STORE):
-                    best_offer_data = {
+                best_offer_data = {
                         "id": best_offer.id,
                         "name": best_offer.name,
                         "code": best_offer.code,
                         "type": best_offer.type,
                         "discount_type": best_offer.discount_type,
                         "discount_value":best_offer.discount_value
-                    } 
-                elif best_offer.type == OfferType.BOGO:
-                    best_offer_data = {
-                        "id": best_offer.id,
-                        "name": best_offer.name,
-                        "code": best_offer.code,
-                        "type": best_offer.type,
-                        "bogo_meta": {
-                            "id": best_offer.bogo_meta.id,
-                            "apply_to_same_item": best_offer.bogo_meta.apply_to_same_item,
-                            "buy_quantity": best_offer.bogo_meta.buy_quantity,
-                            "buy_item_id": best_offer.bogo_meta.buy_item_id,
-                            "get_quantity": best_offer.bogo_meta.get_quantity,
-                            "get_item_id": best_offer.bogo_meta.get_item_id,
-                        }
                     }
 
             response.append({
@@ -263,7 +253,7 @@ async def product_detail(
     
     if offers:
         # Build indexes
-        item_map, category_map, store_offer, bogo_map = build_offer_indexes(offers)
+        bogo_map, item_map, category_map, store_offer = build_offer_indexes(offers)
         
         for variant in result.variants:
             
@@ -287,6 +277,13 @@ async def product_detail(
                         "discount_value":best_offer.discount_value
                     } 
                 elif best_offer.type == OfferType.BOGO:
+                    get_item_result = await db.execute(
+                        select(ProductVariant)
+                        .options(selectinload(ProductVariant.product))
+                        .where(ProductVariant.id == best_offer.bogo_meta.get_item_id)
+                    )
+                    get_item = get_item_result.scalars().first()
+                    
                     best_offer_data = {
                         "id": best_offer.id,
                         "name": best_offer.name,
@@ -299,9 +296,18 @@ async def product_detail(
                             "buy_item_id": best_offer.bogo_meta.buy_item_id,
                             "get_quantity": best_offer.bogo_meta.get_quantity,
                             "get_item_id": best_offer.bogo_meta.get_item_id,
+                            "get_item": {
+                                "id": get_item.id,
+                                "sku": get_item.sku,
+                                "price": get_item.price,
+                                "product": {
+                                    "id": get_item.product.id,
+                                    "name": get_item.product.name,
+                                    "description": get_item.product.description
+                                }
+                            }
                         }
                     }
-        
             variant.best_offer = best_offer_data
     
     return result

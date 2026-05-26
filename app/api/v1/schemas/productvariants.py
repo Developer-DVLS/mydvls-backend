@@ -21,6 +21,9 @@ class ProductVariantBase(BaseModel):
 class ProductVariantImageBase(BaseModel):
     image_url: str
 
+class CreateProductVariantImage(ProductVariantImageBase):
+    variant_id: int
+
 class ProductVariantImageRequest(ProductVariantImageBase):
     pass
 

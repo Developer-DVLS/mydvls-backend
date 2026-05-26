@@ -6,7 +6,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.carts import CartBOGOFreeItem, CartProductResponse, CartResponse, ProductResponse, ProductVariantResponse
+from app.api.v1.schemas.carts import CartBOGOFreeItem, CartGetItem, CartGetItemProduct, CartResponse, ProductVariantResponse
 from app.models.carts import Cart, CartProduct, CartStatus
 from app.models.offers import DiscountType, Offer, OfferType
 from app.models.products import Product, ProductVariant
@@ -471,6 +471,10 @@ class CartService:
                     cart_product_response.discounted_amount = discounted_amount
                 # handle bogo offer accordingly
                 elif cart_product_response.offer.type == OfferType.BOGO:
+                    if cart_product_response.quantity != cart_product_response.offer.bogo_meta.buy_quantity:
+                        cart_product_response.offer = None
+                        continue
+                    
                     if cart_product_response.offer.bogo_meta.apply_to_same_item:
                         response = self.calculate_same_item_bogo(
                             cart_product_response.offer,
@@ -495,6 +499,26 @@ class CartService:
                                 unit_price=0 
                             )
 
+                    # add bogo get item data
+                    get_item_result = await db.execute(
+                        select(ProductVariant)
+                        .options(selectinload(ProductVariant.product),
+                                 selectinload(ProductVariant.images)
+                                 )
+                        .where(ProductVariant.id == cart_product_response.offer.bogo_meta.get_item_id)
+                    )
+                    get_item = get_item_result.scalars().first()
+                    cart_product_response.offer.bogo_meta.get_item = CartGetItem(
+                        id=get_item.id,
+                        sku=get_item.sku,
+                        price=get_item.price,
+                        image=get_item.images[0].image_url if get_item.images else None,
+                        product = CartGetItemProduct(
+                            id=get_item.product.id,
+                            name=get_item.product.name,
+                            description=get_item.product.description,
+                        )
+                    )
         
         # total cart totals
         cart = self.calculate_cart_total(cart)
@@ -550,6 +574,12 @@ class CartService:
             
             #assign variant
             cart_product.product_variant = variant
+            
+            cart_product.product_variant.image = (
+                variant.images[0].image_url
+                if variant.images
+                else None
+            )
             
             # ALWAYS use DB price (source of truth)
             price = float(variant.price)

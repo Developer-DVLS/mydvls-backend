@@ -27,7 +27,26 @@ class ProductVariantResponse(BaseModel):
     price: float
     product_id: int
     product: ProductResponse
-    # images: VariantImageResponse
+    # images: Optional[List[VariantImageResponse]] = None
+    image: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class CartGetItemProduct(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+        
+class CartGetItem(BaseModel):
+    id: int
+    sku: str
+    price: float = 0.0
+    image: Optional[str] = None
+    product: CartGetItemProduct
     
     class Config:
         from_attributes = True
@@ -39,6 +58,7 @@ class CartBOGOMeta(BaseModel):
     get_item_id: Optional[int] = None
     get_quantity: int
     apply_to_same_item: bool = True
+    get_item: CartGetItem
 
 class CartOfferResponse(BaseModel):
     id: int
