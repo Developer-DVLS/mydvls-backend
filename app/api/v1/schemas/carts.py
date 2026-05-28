@@ -26,7 +26,7 @@ class ProductVariantResponse(BaseModel):
     sku: str
     price: float
     product_id: int
-    product: ProductResponse
+    product: Optional[ProductResponse] = None
     # images: Optional[List[VariantImageResponse]] = None
     image: Optional[str] = None
     
@@ -58,7 +58,7 @@ class CartBOGOMeta(BaseModel):
     get_item_id: Optional[int] = None
     get_quantity: int
     apply_to_same_item: bool = True
-    get_item: CartGetItem
+    get_item: Optional[CartGetItem] = None
 
 class CartOfferResponse(BaseModel):
     id: int

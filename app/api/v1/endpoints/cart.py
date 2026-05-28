@@ -11,11 +11,12 @@ cart_router = APIRouter(prefix="/cart", tags=["Cart"])
 
 cart_service = CartService()
 
-@cart_router.get("/", response_model=CartResponse | dict)
+@cart_router.get("/", response_model=CartResponse | dict )
 async def get_cart(
     request: Request,
     cart_count: Optional[bool] = False,
     coupon_code: Optional[str] = None,
+    remove_coupon: Optional[bool] = True,
     db: AsyncSession = Depends(get_db),
     user = Depends(get_current_user_optional)
 ):
@@ -34,9 +35,12 @@ async def get_cart(
     
     # calculate totals    
     enriched_cart = await cart_service.enrich_cart(
+        request=request,
         db=db,
+        user_id=user_id,
         cart=cart,
-        coupon_code=coupon_code
+        coupon_code=coupon_code,
+        remove_coupon=remove_coupon
     )
 
     return enriched_cart

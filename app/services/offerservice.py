@@ -68,6 +68,7 @@ async def validate_offer_conflict(
     else:
         query = (
             select(Offer)
+            .options(selectinload(Offer.bogo_meta)) 
             .where(
                 and_(
                     Offer.type == offer_type,
@@ -412,6 +413,7 @@ async def get_active_offer_by_item(db, item_id: int):
 async def check_active_offer(db, offer):
     query = (
         select(Offer)
+        .options(selectinload(Offer.bogo_meta)) 
         .where(
             and_(
                 Offer.id ==offer.id,

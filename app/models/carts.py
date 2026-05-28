@@ -1,6 +1,6 @@
 import enum
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import Column, Integer, Numeric, ForeignKey, DateTime, Enum
+from sqlalchemy import Column, Integer, Numeric, ForeignKey, DateTime, Enum, Boolean
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 
@@ -21,6 +21,7 @@ class Cart(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    coupon_id = Column(Integer, ForeignKey("offers.id"), nullable=True)
     
     status =  Column(Enum(CartStatus), default=CartStatus.ACTIVE, nullable=False, index=True)
     
@@ -45,6 +46,13 @@ class CartProduct(Base):
     
     quantity = Column(Integer, default=1, nullable=False)
     unit_price = Column(Numeric(10, 2), default=0.00, nullable=False)
+    
+    #for bogo free item
+    is_free_item = Column(Boolean, default=False, nullable=True)
+    # what triggered this free item
+    trigger_cart_item_id = Column(Integer, ForeignKey("cart_items.id"), nullable=True)
+    # which offer generated this
+    parent_offer_id = Column(Integer, ForeignKey("offers.id"), nullable=True)
     
     # relationships
     cart = relationship("Cart", back_populates="cart_products")

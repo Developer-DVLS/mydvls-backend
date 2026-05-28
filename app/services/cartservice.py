@@ -6,10 +6,10 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.carts import CartBOGOFreeItem, CartGetItem, CartGetItemProduct, CartResponse, ProductVariantResponse
+from app.api.v1.schemas.carts import CartBOGOFreeItem, CartBOGOMeta, CartGetItem, CartGetItemProduct, CartOfferResponse, CartResponse, ProductVariantResponse
 from app.models.carts import Cart, CartProduct, CartStatus
 from app.models.offers import DiscountType, Offer, OfferType
-from app.models.products import Product, ProductVariant
+from app.models.products import Product, ProductCategory, ProductVariant
 from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer
 from app.utils.cache import delete_cache, get_cache, set_cache
 
@@ -120,7 +120,7 @@ class CartService:
         result = await db.execute(
             select(ProductVariant)
             .join(ProductVariant.product)
-            .options(selectinload(ProductVariant.product))
+            .options(selectinload(ProductVariant.product).selectinload(Product.category))
             .where(
                 ProductVariant.id == product_variant_id,
                 ProductVariant.is_active == True,
@@ -240,7 +240,15 @@ class CartService:
     async def get_or_create_db_cart(self, db: AsyncSession, user_id):
         result = await db.execute(
             select(Cart)
-            .options(selectinload(Cart.cart_products))
+            .options(
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.product)
+                .selectinload(Product.category),
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.images),
+                )
             .where(
                 Cart.user_id == user_id,
                 Cart.status == CartStatus.ACTIVE
@@ -254,6 +262,22 @@ class CartService:
             db.add(cart)
             await db.commit()
             await db.refresh(cart)
+            
+            # Re-fetch with full eager loading after create
+            result = await db.execute(
+                select(Cart)
+                .options(
+                    selectinload(Cart.cart_products)
+                    .selectinload(CartProduct.product_variant)
+                    .selectinload(ProductVariant.product)
+                    .selectinload(Product.category),
+                    selectinload(Cart.cart_products)
+                    .selectinload(CartProduct.product_variant)
+                    .selectinload(ProductVariant.images),
+                )
+                .where(Cart.id == cart.id)
+            )
+            cart = result.scalars().first()
 
         return cart 
 
@@ -269,7 +293,7 @@ class CartService:
         result = await db.execute(
             select(ProductVariant)
             .join(ProductVariant.product)
-            .options(selectinload(ProductVariant.product))
+            .options(selectinload(ProductVariant.product).selectinload(Product.category))
             .where(
                 ProductVariant.id == product_variant_id,
                 ProductVariant.is_active == True,
@@ -307,24 +331,20 @@ class CartService:
         await db.commit()
         await db.refresh(cart)
         
-        # load 
-        # result = await db.execute(
-        #     select(Cart)
-        #     .options(
-        #         selectinload(Cart.cart_products)
-        #         .selectinload(CartProduct.product_variant)
-        #         .selectinload(ProductVariant.product),
-
-        #         selectinload(Cart.cart_products)
-        #         .selectinload(CartProduct.product_variant)
-        #         .selectinload(ProductVariant.images),
-        #     )
-        #     .where(Cart.id == cart.id)
-        # )
-
-        # cart = result.scalars().first()
-
-        return cart
+        result = await db.execute(
+            select(Cart)
+            .options(
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.product)
+                .selectinload(Product.category),
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.images),
+            )
+            .where(Cart.id == cart.id)
+        )
+        return result.scalars().first()
 
     
     async def update_db_cart_item(self, db: AsyncSession, user_id, cart_product_id, quantity):
@@ -352,8 +372,21 @@ class CartService:
         if item:
             item.quantity = quantity
             await db.commit()
-
-        return cart
+            
+        result = await db.execute(
+        select(Cart)
+            .options(
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.product)
+                .selectinload(Product.category),
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.images),
+            )
+            .where(Cart.id == cart.id)
+        )
+        return result.scalars().first()
     
     async def remove_db_cart_item(self, db: AsyncSession, user_id, cart_product_id):
         cart = await self.get_or_create_db_cart(db, user_id)
@@ -419,9 +452,11 @@ class CartService:
     # Calculate offers and totals
     # ======================================================
     
-    async def enrich_cart(self, db, cart, coupon_code):
+    async def enrich_cart(self, request, db, user_id, cart, coupon_code, remove_coupon):
         # normalize
-        cart = CartResponse(**cart) if isinstance(cart, dict) else cart
+        # cart = CartResponse(**cart) if isinstance(cart, dict) else cart
+        if not isinstance(cart, CartResponse):
+            cart = CartResponse.model_validate(cart)
 
         # attach product-variant and product data 
         #along with subtotal calculation, (discount amount and discounted_amount initialization)
@@ -502,7 +537,7 @@ class CartService:
                     # add bogo get item data
                     get_item_result = await db.execute(
                         select(ProductVariant)
-                        .options(selectinload(ProductVariant.product),
+                        .options(selectinload(ProductVariant.product).selectinload(Product.category),
                                  selectinload(ProductVariant.images)
                                  )
                         .where(ProductVariant.id == cart_product_response.offer.bogo_meta.get_item_id)
@@ -524,12 +559,18 @@ class CartService:
         cart = self.calculate_cart_total(cart)
 
         # coupon validation
-        if coupon_code:
-            cart = await self.coupon_validation(db, cart, coupon_code)
+        if remove_coupon:
+            cart.coupon_applied = False
+            cart.coupon_applicable = False
+            cart.coupon_message = "No coupon applied."
+            
+            ## remove coupon from session/ db
+            await self.remove_applied_coupon(request, db, user_id)
+        else:
+            cart = await self.coupon_validation(request, db, cart, coupon_code, user_id)
 
         return cart
     
-        cart.discount_amount = discount_amount
     def calculate_cart_total(self, cart):
         subtotal = 0
         discount_amount = 0
@@ -558,8 +599,8 @@ class CartService:
         result = await db.execute(
             select(ProductVariant)
             .options(
-                selectinload(ProductVariant.product),
-                selectinload(ProductVariant.images)
+                selectinload(ProductVariant.product).selectinload(Product.category),
+                selectinload(ProductVariant.images),
             )
             .where(ProductVariant.id.in_(variant_ids))
         )
@@ -647,29 +688,57 @@ class CartService:
         return discount_amount
     
     #coupon validation
-    async def coupon_validation(self, db, cart, coupon_code):
+    async def coupon_validation(self, request, db, cart, coupon_code, user_id):
         now = datetime.utcnow()
         
-        # get coupon with this coupon code
-        result = await db.execute(
-            select(Offer)
-            .where(
-                Offer.type == OfferType.COUPON,
-                Offer.code == coupon_code,
-                Offer.is_active == True,
-                Offer.start_date <= now,
-                Offer.end_date >= now,
+        # get coupon with this coupon code when first applied
+        if coupon_code:
+            result = await db.execute(
+                select(Offer)
+                .where(
+                    Offer.type == OfferType.COUPON,
+                    Offer.code == coupon_code,
+                    Offer.is_active == True,
+                    Offer.start_date <= now,
+                    Offer.end_date >= now,
+                )
+
             )
+            coupon_offer = result.scalars().first()
+            
+            if not coupon_offer:
+                cart.coupon_applied = False
+                cart.coupon_applicable = False
+                cart.coupon_message = "Invalid coupon code."
 
-        )
-        coupon_offer = result.scalars().first()
-        
-        if not coupon_offer:
-            cart.coupon_applied = False
-            cart.coupon_applicable = False
-            cart.coupon_message = "Invalid coupon code."
+                return cart
+            
+            ## add coupon in session/ db
+            await self.add_applied_coupon(request, db, user_id, coupon_offer)
+        else:
+            #get coupon id from session/ db
+            coupon_id = await self.get_applied_coupon(request, db, user_id)
+            
+            result = await db.execute(
+                select(Offer)
+                .where(
+                    Offer.id == coupon_id,
+                    Offer.type == OfferType.COUPON,
+                    Offer.is_active == True,
+                    Offer.start_date <= now,
+                    Offer.end_date >= now,
+                )
 
-            return cart
+            )
+            
+            coupon_offer = result.scalars().first()
+            
+            if not coupon_offer:
+                cart.coupon_applied = False
+                cart.coupon_applicable = False
+                cart.coupon_message = "Invalid coupon code."
+
+                return cart
         
         # minimum spent amount validation
         if cart.subtotal < coupon_offer.min_spent_amount:
@@ -694,6 +763,97 @@ class CartService:
         cart.total_amount = cart.total_amount - coupon_discount_amount
             
         return cart
+    
+    # ======================================================
+    # COUPON-CART RELATION
+    # ======================================================
+    
+    # get coupon_id from session/ db
+    async def get_applied_coupon(self, request, db, user_id):
+        #if user is logged in coupon_id get from cart
+        if user_id:
+            result = await db.execute(
+                select(Cart)
+                .where(
+                    Cart.user_id == user_id,
+                    Cart.status == CartStatus.ACTIVE
+                )
+            )
+            user_cart = result.scalars().first()
+            
+            if not user_cart:
+                return None 
+            print("coupon_idddd", user_cart.coupon_id)
+            
+            return user_cart.coupon_id
+        else:
+            # get from session
+            # get redis cache key from cookie
+            redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+            if not redis_cache_key:
+                return None
+            cart = await get_cache(redis_cache_key)
+            if 'coupon_id' in cart and cart.get('coupon_id'):
+                return cart['coupon_id']
+    
+    async def add_applied_coupon(self, request, db, user_id, coupon):
+        # if user is logged in add coupon to cart
+        if user_id:
+            result = await db.execute(
+                select(Cart)
+                .where(
+                    Cart.user_id == user_id,
+                    Cart.status == CartStatus.ACTIVE
+                )
+            )
+            user_cart = result.scalars().first()
+            
+            if not user_cart:
+                return None 
+            
+            user_cart.coupon_id = coupon.id
+            await db.commit()
+            await db.refresh(user_cart)            
+        else:
+            # add coupon_id in session
+            # get redis cache key from cookie
+            redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+            if not redis_cache_key:
+                return None
+            cart = await get_cache(redis_cache_key)
+            cart["coupon_id"] = coupon.id
+            
+            await set_cache(redis_cache_key, cart, expire=self.GUEST_CART_EXPIRY)
+    
+    async def remove_applied_coupon(self, request, db, user_id):
+        if user_id:
+            result = await db.execute(
+                select(Cart)
+                .where(
+                    Cart.user_id == user_id,
+                    Cart.status == CartStatus.ACTIVE
+                )
+            )
+            user_cart = result.scalars().first()
+            
+            if not user_cart:
+                return None 
+            
+            user_cart.coupon_id = None
+            await db.commit()
+            await db.refresh(user_cart)
+        else:
+            # add coupon_id in session
+            # get redis cache key from cookie
+            redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+            if not redis_cache_key:
+                return None
+            cart = await get_cache(redis_cache_key)
+            if not cart:
+                return None
+            cart["coupon_id"] =  None
+            
+            await set_cache(redis_cache_key, cart, expire=self.GUEST_CART_EXPIRY)
     
     # ======================================================
     # BOGO OFFER
