@@ -112,3 +112,11 @@ class PaginatedProductVariantResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ProductVariantDropdown(BaseModel):
+    id: int
+    sku: str
+    product_name: str
+    
+    class Config:
+        from_attributes = True

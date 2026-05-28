@@ -4,7 +4,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.schemas.productvariants import CreateProductVariantImage, PaginatedProductVariantResponse, ProductAttributeCreate, ProductAttributeMini, ProductAttributeRequest, ProductAttributeResponse, ProductAttributeUpdate, ProductVariantImageBase, ProductVariantImageResponse, ProductVariantRequest, ProductVariantResponse, ProductVariantUpdate
+from app.api.v1.schemas.productvariants import CreateProductVariantImage, PaginatedProductVariantResponse, ProductAttributeCreate, ProductAttributeMini, ProductAttributeRequest, ProductAttributeResponse, ProductAttributeUpdate, ProductVariantDropdown, ProductVariantImageBase, ProductVariantImageResponse, ProductVariantRequest, ProductVariantResponse, ProductVariantUpdate
 from app.core.database import get_db
 from app.models.products import Product, ProductAttribute, ProductVariant, ProductVariantImage
 from app.models.user import User
@@ -52,6 +52,41 @@ async def list_variants(
         query = query.where(ProductVariant.is_featured == is_featured)
 
     return await get_paginated_result(db, query, skip, limit)
+
+@product_variant_router.get('/options', response_model=List[ProductVariantDropdown])
+async def list_variants_options(
+    search: Optional[str] = None,
+    product_id: Optional[int] = None,
+    is_active: Optional[bool] = None,
+    is_featured: Optional[bool] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(ProductVariant).options(
+        selectinload(ProductVariant.product)
+    ).order_by(ProductVariant.created_at.desc())
+    
+    # search by SKU or product name
+    if search:
+        query = query.join(Product).where(
+            or_(
+                ProductVariant.sku.ilike(f"%{search}%"),
+                Product.name.ilike(f"%{search}%")
+            )
+        )
+
+    # filter by product
+    if product_id is not None:
+        query = query.where(ProductVariant.product_id == product_id)
+
+    # boolean filters (IMPORTANT: use is not None)
+    if is_active is not None:
+        query = query.where(ProductVariant.is_active == is_active)
+
+    if is_featured is not None:
+        query = query.where(ProductVariant.is_featured == is_featured)
+
+    result = await db.execute(query)
+    return result.scalars().all()
 
 @product_variant_router.get('/{variant_id}', response_model=ProductVariantResponse)
 async def get_variant(

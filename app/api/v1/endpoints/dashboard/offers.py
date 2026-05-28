@@ -5,12 +5,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.schemas.offers import  OfferBOGOResponse, OfferBOGOUpdate, OfferCreate, OfferResponse, OfferTargetResponse, OfferTargetUpdate, OfferUpdate, PaginatedOfferResponse
+from app.api.v1.schemas.offers import  ComboOfferCreate, ComboOfferResponse, ComboOfferUpdate, OfferBOGOResponse, OfferBOGOUpdate, OfferCreate, OfferResponse, OfferTargetResponse, OfferTargetUpdate, OfferUpdate, PaginatedComboOfferResponse, PaginatedOfferResponse
 from app.core.database import get_db
-from app.models.offers import Offer, OfferBOGO, OfferTarget, OfferType, TargetType
+from app.models.offers import ComboDiscountType, ComboOffer, ComboOfferItem, Offer, OfferBOGO, OfferTarget, OfferType, TargetType
+from app.models.user import User
 from app.services.offerservice import check_active_offer, validate_dates, validate_discount, validate_offer, validate_offer_conflict, validate_target_exists
 from app.utils.cache import delete_cache
 from app.utils.pagination import get_paginated_result
+from app.auth.permissions import staff_only
 
 
 offer_router = APIRouter(prefix="/dashboard/offer", tags=['Offer CRUD'])
@@ -20,6 +22,7 @@ PRODUCT_CACHE_KEY = "products:list"
 @offer_router.post("/", response_model=OfferResponse)
 async def create_offer(
     data: OfferCreate,
+    current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ):
     # validate offer fields
@@ -139,6 +142,7 @@ async def get_offer(
 async def update_offer(
     offer_id: int,
     data: OfferUpdate,
+    current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -186,6 +190,7 @@ async def update_offer(
 @offer_router.delete("/{offer_id:int}")
 async def delete_offer(
     offer_id: int,
+    current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -215,6 +220,7 @@ async def delete_offer(
 async def update_target_type(
     target_type_id: int,
     data: OfferTargetUpdate,
+    current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
@@ -254,6 +260,7 @@ async def update_target_type(
 @offer_router.delete("/target-type/{target_type_id}")
 async def delete_target_type(
     target_type_id: int,
+    current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
@@ -284,6 +291,7 @@ async def delete_target_type(
 async def update_offer_bogo(
     offer_bogo_id: int,
     data: OfferBOGOUpdate,
+    current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
@@ -320,6 +328,7 @@ async def update_offer_bogo(
 @offer_router.delete("/offer-bogo/{offer_bogo_id}")
 async def delete_offer_bogo(
     offer_bogo_id: int,
+    current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
@@ -344,4 +353,163 @@ async def delete_offer_bogo(
     return {
         "status": True,
         "message": "Offer bogo deleted successfully"
+    }
+    
+## combo offer
+@offer_router.post("/combo-offer/", response_model=ComboOfferResponse)
+async def create_combo_offer(
+    data: ComboOfferCreate,
+    current_user: User = Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+):
+    # validate offer fields
+    validate_dates(data.start_date, data.end_date)
+    validate_discount(data.discount_type, data.discount_value)
+
+    try: 
+        combo_offer = ComboOffer(
+            name = data.name,
+            description = data.description, 
+            is_active = data.is_active,
+            start_date = data.start_date,
+            end_date = data.end_date,
+            discount_type = data.discount_type,
+            discount_value = data.discount_value,
+            priority = data.priority,
+            stackable = data.stackable
+        )
+
+        db.add(combo_offer)
+        await db.flush()
+
+        # create targets
+        if data.items:
+            for item in data.items:
+                db.add(
+                    ComboOfferItem(
+                        combo_offer_id = combo_offer.id,
+                        product_variant_id = item.product_variant_id if item.product_variant_id else None,
+                        product_id = item.product_id if item.product_id else None,
+                        quantity = item.quantity
+                    )
+                )
+                
+        await db.commit() 
+    except Exception:
+        await db.rollback()
+        raise
+    
+    result = await db.execute(
+        select(ComboOffer)
+        .options(
+            selectinload(ComboOffer.items)
+        )
+        .where(ComboOffer.id == combo_offer.id)
+    )
+
+    return result.scalars().first()
+
+@offer_router.get("/combo-offer/", response_model=PaginatedComboOfferResponse)
+async def list_combo_offer(
+    skip: int = Query(0, ge=0, description="Number of items to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
+    discount_type: Optional[ComboDiscountType] = None,
+    is_active: Optional[bool] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(ComboOffer).options(
+        selectinload(ComboOffer.items),
+    ).order_by(ComboOffer.created_at.desc())
+    
+    #filters
+    if discount_type:
+        query = query.where(ComboOffer.discount_type == discount_type)
+    if is_active is not None:
+        query = query.where(ComboOffer.is_active == is_active)
+    if start_date:
+        query = query.where(func.date(ComboOffer.start_date) == start_date.date())
+    if end_date:
+        query = query.where(func.date(ComboOffer.end_date) == end_date.date())
+        
+    return await get_paginated_result(db, query, skip, limit)
+
+@offer_router.get("/combo-offer/{offer_id:int}/", response_model=ComboOfferResponse)
+async def get_combo_offer(
+    offer_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(ComboOffer).options(
+        selectinload(ComboOffer.items)
+    ).where(ComboOffer.id == offer_id)
+    result = await db.execute(query)
+    return result.scalars().first()
+
+@offer_router.patch("/combo-offer/{offer_id:int}/", response_model=ComboOfferResponse)
+async def update_combo_offer(
+    offer_id: int,
+    data: ComboOfferUpdate,
+    current_user: User = Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ComboOffer)
+        .options(selectinload(ComboOffer.items))
+        .where(ComboOffer.id == offer_id)
+    )
+    combo_offer = result.scalars().first()
+    if not combo_offer:
+        raise HTTPException(
+            status_code=404,
+            detail="Offer not found"
+        )
+    
+    # validate offer fields
+    if data.start_date or data.end_date:
+        validate_dates(data.start_date or combo_offer.start_date, data.end_date or combo_offer.end_date)
+    if  data.discount_type or data.discount_value:
+        validate_discount(data.discount_type or combo_offer.discount_type, data.discount_value or combo_offer.discount_value)
+    
+    # apply only provided fields
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(combo_offer, field, value)
+
+    await db.commit()
+    await db.refresh(combo_offer)
+    
+    result = await db.execute(
+        select(ComboOffer)
+        .options(
+            selectinload(ComboOffer.items)
+        )
+        .where(ComboOffer.id == combo_offer.id)
+    )
+    combo_offer = result.scalars().first()
+    return combo_offer
+
+
+@offer_router.delete("/combo-offer/{offer_id:int}/")
+async def delete_combo_offer(
+    offer_id: int,
+    current_user: User = Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ComboOffer)
+        .where(ComboOffer.id == offer_id)
+    )
+    combo_offer = result.scalars().first()
+    if not combo_offer:
+        raise HTTPException(
+            status_code=404,
+            detail="Offer not found"
+        )
+    
+    await db.delete(combo_offer)
+    await db.commit()
+
+    return {
+        "status": True,
+        "message": "Offer deleted successfully"
     }

@@ -6,6 +6,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.offers import (
+    ComboDiscountType,
     OfferType,
     DiscountType,
     TargetType,
@@ -138,3 +139,90 @@ class PaginatedOfferResponse(BaseModel):
     skip: int
     limit: int
     data: Optional[List[OfferResponse]] = None    
+    
+
+# combo offer
+class ComboOfferBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_active: bool
+    start_date: datetime
+    end_date: datetime
+    discount_type: ComboDiscountType
+    discount_value: float
+    priority: int
+    stackable: bool 
+    
+    @field_validator("start_date", "end_date", mode="before")
+    @classmethod
+    def remove_timezone(cls, v):
+        if isinstance(v, str):
+            v = datetime.fromisoformat(v.replace("Z", ""))
+
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+
+        return v
+
+class ComboOfferItemBase(BaseModel):
+    product_variant_id: Optional[int] = None
+    product_id: Optional[int] = None
+    quantity: Optional[int] = 1
+    
+class ComboOfferCreate(ComboOfferBase):
+    items: List[ComboOfferItemBase]
+
+class ComboOfferItemResponse(ComboOfferItemBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
+
+class ComboOfferItemCreate(ComboOfferItemBase):
+    combo_offer_id: int
+
+class ComboOfferResponse(ComboOfferBase):
+    id: int
+    items: Optional[List[ComboOfferItemResponse]] = None
+    created_at: datetime
+    updated_at:  datetime
+    
+    class Config:
+        from_attributes = True
+
+class ComboOfferItemResponse(ComboOfferItemBase):
+    id: int
+    combo_offer_id: int
+    created_at: datetime
+    updated_at:  datetime
+    
+    class Config:
+        from_attributes = True
+
+class PaginatedComboOfferResponse(BaseModel):
+    total: int
+    skip: int
+    limit: int
+    data: Optional[List[ComboOfferResponse]] = None   
+    
+class ComboOfferUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    discount_type: Optional[ComboDiscountType] = None
+    discount_value: Optional[float] = None
+    priority: Optional[int] = None
+    stackable: Optional[bool] = None 
+    
+    @field_validator("start_date", "end_date", mode="before")
+    @classmethod
+    def remove_timezone(cls, v):
+        if isinstance(v, str):
+            v = datetime.fromisoformat(v.replace("Z", ""))
+
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+
+        return v

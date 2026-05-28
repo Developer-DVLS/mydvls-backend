@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import Column, Integer, String, Enum, Boolean, DateTime, ForeignKey, Float
+from sqlalchemy import Column, Integer, Numeric, String, Enum, Boolean, DateTime, ForeignKey, Float
 from sqlalchemy.orm import relationship
 import enum
 
@@ -124,3 +124,95 @@ class OfferBOGO(Base):
     get_item_id = Column(Integer, nullable=True)
 
     offer = relationship("Offer", back_populates="bogo_meta")
+
+
+## combo offer
+
+class ComboDiscountType(str, enum.Enum):
+    COMBO_PRICE = "combo_price"
+    FIXED = "fixed"
+    PERCENTAGE = "percentage"
+    
+class ComboOffer(Base):
+    """ 
+    Combo offer model
+
+    ComboOffer represents a predefined product bundle where a 
+    fixed set of product variants are grouped together and sold
+    under a special pricing rule.
+
+    It supports two discount strategies:
+    - a fixed combo price for the entire bundle, or
+    - a percentage discount applied to the total price of included items.
+    
+    Each combo has a validity period, priority for conflict resolution, 
+    and a stackable flag that controls whether it can be combined with other promotions.
+    """
+    
+    __tablename__ = "combo_offers"
+
+    id = Column(Integer, primary_key=True)
+
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+
+    is_active = Column(Boolean, default=True)
+
+    start_date = Column(DateTime)
+    end_date = Column(DateTime)
+
+    discount_type = Column(Enum(ComboDiscountType), nullable=False)
+    discount_value = Column(Numeric(5, 2), nullable=True)
+    
+    priority = Column(Integer, default=0)
+    stackable = Column(Boolean, default=True)
+
+    items = relationship(
+        "ComboOfferItem",
+        back_populates="offer",
+        cascade="all, delete-orphan"
+    )
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow,
+                        onupdate=datetime.utcnow, nullable=False)
+
+class ComboOfferItem(Base):
+    """ 
+    ComboOfferItem defines the individual product variants that belong to a ComboOffer.
+    
+    Each item specifies:
+    - the product variant included in the combo
+    - the required quantity of that variant within the bundle
+    
+    This model enables precise control over bundle composition, 
+    ensuring that only specific variants (not just products) are eligible for the combo offer.
+    """
+    
+    __tablename__ = "combo_offer_items"
+
+    id = Column(Integer, primary_key=True)
+
+    combo_offer_id = Column(
+        Integer,
+        ForeignKey("combo_offers.id", ondelete="CASCADE")
+    )
+
+    product_variant_id = Column(
+        Integer,
+        ForeignKey("product_variants.id"),
+        nullable=True
+    )
+    product_id = Column(
+        Integer, 
+        ForeignKey("products.id"), 
+        nullable=True
+    )
+
+    quantity = Column(Integer, default=1)
+
+    offer = relationship("ComboOffer", back_populates="items")
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow,
+                        onupdate=datetime.utcnow, nullable=False)
