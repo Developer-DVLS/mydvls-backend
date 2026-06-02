@@ -1,10 +1,11 @@
 from datetime import datetime
+from decimal import Decimal
 from fastapi import HTTPException
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.offers import Offer, OfferBOGO, OfferTarget, OfferType, TargetType
+from app.models.offers import ComboDiscountType, ComboOffer, ComboOfferItem, Offer, OfferBOGO, OfferTarget, OfferType, TargetType
 from app.models.products import Product, ProductCategory
 
 
@@ -428,3 +429,25 @@ async def check_active_offer(db, offer):
     if offer:
         return True
     return False
+
+# COMBO offer
+
+async def valid_combo_offers(db):
+    now = datetime.utcnow()
+
+    query = await db.execute(
+        select(ComboOffer)
+        .options(
+            selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant)
+        )
+        .where(
+            ComboOffer.is_active == True,
+            ComboOffer.start_date <= now,
+            ComboOffer.end_date >= now,
+        )
+        .order_by(ComboOffer.priority)
+    )
+
+    combo_offers = query.scalars().all()    
+    return combo_offers

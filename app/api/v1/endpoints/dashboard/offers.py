@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.schemas.offers import  ComboOfferCreate, ComboOfferResponse, ComboOfferUpdate, OfferBOGOResponse, OfferBOGOUpdate, OfferCreate, OfferResponse, OfferTargetResponse, OfferTargetUpdate, OfferUpdate, PaginatedComboOfferResponse, PaginatedOfferResponse
+from app.api.v1.schemas.offers import  ComboOfferCreate, ComboOfferItemCreate, ComboOfferItemResponse, ComboOfferResponse, ComboOfferUpdate, OfferBOGOResponse, OfferBOGOUpdate, OfferCreate, OfferResponse, OfferTargetResponse, OfferTargetUpdate, OfferUpdate, PaginatedComboOfferResponse, PaginatedOfferResponse
 from app.core.database import get_db
 from app.models.offers import ComboDiscountType, ComboOffer, ComboOfferItem, Offer, OfferBOGO, OfferTarget, OfferType, TargetType
 from app.models.user import User
@@ -513,3 +513,46 @@ async def delete_combo_offer(
         "status": True,
         "message": "Offer deleted successfully"
     }
+    
+# @offer_router.post("/combo-offer-item/", response_model=ComboOfferItemResponse)
+# async def add_combo_offer_item(
+#     data: ComboOfferItemCreate,
+#     current_user: User = Depends(staff_only),
+#     db: AsyncSession = Depends(get_db),
+# ):
+#     offer_item = ComboOfferItem(
+#         combo_offer_id = data.combo_offer_id,
+#         product_variant_id = data.product_variant_id if data.product_variant_id else None,
+#         product_id = data.product_id if data.product_id else None,
+#         quantity = data.quantity
+#     )
+#     db.add(offer_item)
+#     await db.commit() 
+#     await db.refresh(offer_item)
+#     return offer_item
+
+@offer_router.delete("/combo-offer-item/{offer_item_id:int}/")
+async def delete_combo_offer_item(
+    offer_item_id: int,
+    current_user: User = Depends(staff_only),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ComboOfferItem)
+        .where(ComboOfferItem.id == offer_item_id)
+    )
+    combo_offer_item = result.scalars().first()
+    if not combo_offer_item:
+        raise HTTPException(
+            status_code=404,
+            detail="Offer item not found"
+        )
+    
+    await db.delete(combo_offer_item)
+    await db.commit()
+
+    return {
+        "status": True,
+        "message": "Offer item deleted successfully"
+    }
+    

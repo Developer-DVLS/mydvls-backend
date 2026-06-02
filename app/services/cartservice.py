@@ -1,4 +1,6 @@
+from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal
 import json
 import uuid
 from fastapi import HTTPException, Request, Response
@@ -8,9 +10,9 @@ from sqlalchemy.orm import selectinload
 
 from app.api.v1.schemas.carts import CartBOGOFreeItem, CartBOGOMeta, CartGetItem, CartGetItemProduct, CartOfferResponse, CartResponse, ProductVariantResponse
 from app.models.carts import Cart, CartProduct, CartStatus
-from app.models.offers import DiscountType, Offer, OfferType
+from app.models.offers import ComboDiscountType, ComboOffer, DiscountType, Offer, OfferType
 from app.models.products import Product, ProductCategory, ProductVariant
-from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer
+from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer, valid_combo_offers
 from app.utils.cache import delete_cache, get_cache, set_cache
 
 class CartService:
@@ -462,6 +464,15 @@ class CartService:
         #along with subtotal calculation, (discount amount and discounted_amount initialization)
         cart = await self._attach_products(db, cart)
         
+        # check for combo offer
+        valid_combo_offers_result = await valid_combo_offers(db)
+        if valid_combo_offers_result:
+            combo_offers =  self.apply_combo_offers(
+                cart_items=cart.cart_products,
+                combo_offers=valid_combo_offers_result
+            )
+        cart.combo_offers = combo_offers
+        
         # check if offer (item, category, store) exists
         # first get all active offers
         offers = await get_all_active_offers(db)
@@ -472,6 +483,11 @@ class CartService:
             for cart_product in cart.cart_products:
                 if not cart_product.product_variant:
                     continue
+                if cart_product.quantity_after_combo <= 0:
+                    continue
+                
+                print("quantity_after_combo!!!!",cart_product.quantity, cart_product.quantity_after_combo)
+                
                 product_variant = (
                     ProductVariantResponse(**cart_product.product_variant)
                     if isinstance(cart_product.product_variant, dict)
@@ -494,7 +510,8 @@ class CartService:
                         discount_amount = self.calculate_product_discount_amount(
                             cart_product_response.offer, 
                             cart_product.product_variant.price,
-                            cart_product.quantity
+                            cart_product.quantity_after_combo
+                            # cart_product.quantity
                             )
                         cart_product_response.discount_amount = discount_amount
                         
@@ -555,8 +572,19 @@ class CartService:
                             )
                         )
         
-        # total cart totals
+        # recalculate total cart totals
         cart = self.calculate_cart_total(cart)
+        
+        if combo_offers:
+            total_bundle_price = 0
+            total_final_price = 0
+            for combo_offer in combo_offers:
+                total_bundle_price += combo_offer['bundle_price']
+                total_final_price += combo_offer['final_price']
+
+            print("cart!!", cart.total_amount)
+            cart.total_amount -= total_bundle_price
+            cart.total_amount += total_final_price
 
         # coupon validation
         if remove_coupon:
@@ -628,6 +656,7 @@ class CartService:
 
             subtotal = price * qty
 
+            cart_product.quantity_after_combo = qty
             cart_product.subtotal = subtotal
             cart_product.discount_amount = 0
             cart_product.discounted_amount = subtotal
@@ -783,7 +812,6 @@ class CartService:
             
             if not user_cart:
                 return None 
-            print("coupon_idddd", user_cart.coupon_id)
             
             return user_cart.coupon_id
         else:
@@ -931,3 +959,121 @@ class CartService:
             "buy_item_id": bogo.buy_item_id,
             "get_item_id": bogo.get_item_id
         }
+        
+    # ======================================================
+    # COMBO OFFER
+    # ======================================================
+    def build_stock(self, cart_items):
+        """
+        Build a stock map from cart items.
+
+        Returns:
+            dict[product_variant_id, quantity]
+            Example: {1: 5, 2: 3}
+        """
+        stock = defaultdict(int)
+
+        for item in cart_items:
+            stock[item.product_variant_id] += item.quantity
+        
+        return stock
+    
+    def get_max_applications(self, combo_offer, stock):
+        """
+        Calculate the maximum number of times a combo offer
+        can be applied based on currently available stock.
+
+        The limiting item in the combo determines the result.
+
+        Returns:
+            int: Number of valid combo applications.
+        """
+    
+        max_count = None
+
+        for item in combo_offer.items:
+
+            available = stock[item.product_variant_id]
+            possible = available // item.quantity
+
+            if max_count is None:
+                max_count = possible
+            else:
+                max_count = min(max_count, possible)
+
+        return max_count or 0
+
+    def consume_stock(self, combo_offer, stock, count, cart_items):
+        """
+        Deduct stock used by an applied combo offer.
+
+        Args:
+            combo_offer: Offer being applied.
+            stock: Mutable stock map.
+            count: Number of times the combo was applied.
+        """
+        for item in combo_offer.items:
+            stock[item.product_variant_id] -= item.quantity * count
+        
+        # sync remaining quantities back to cart items
+        for cart_item in cart_items:
+            cart_item.quantity_after_combo = stock[cart_item.product_variant_id]
+    
+    def apply_combo_offers(self, cart_items, combo_offers):
+        """
+        Apply combo offers against cart inventory.
+
+        Workflow:
+        1. Build available stock from cart items.
+        2. Determine how many times each offer can be applied.
+        3. Calculate bundle value and discount.
+        4. Record applied offers.
+        5. Consume used stock to prevent overlapping discounts.
+
+        Returns:
+            list[dict]: Applied offer details including
+            discount amount, final price, and application count.
+        """
+    
+        stock = self.build_stock(cart_items)
+
+        results = []
+        for offer in combo_offers:
+            max_count = self.get_max_applications(offer, stock)
+
+            if max_count <= 0:
+                continue
+
+            bundle_price = 0
+
+            for item in offer.items:
+                price = item.product_variant.price  # or join loaded price
+                bundle_price += price * item.quantity
+
+            total_bundle = bundle_price * max_count
+            
+
+            # discount logic (example percentage)
+            if offer.discount_type == ComboDiscountType.PERCENTAGE.value:
+                discount = total_bundle * (offer.discount_value / 100)
+            elif offer.discount_type == ComboDiscountType.FIXED.value:
+                discount = offer.discount_value * max_count
+            elif offer.discount_type == ComboDiscountType.COMBO_PRICE.value:
+                discount = total_bundle - (offer.discount_value * max_count)
+
+            # CRITICAL STEP
+            self.consume_stock(offer, stock, max_count, cart_items)
+            
+            results.append({
+                "id": offer.id,
+                "name": offer.name,
+                "discount_type": offer.discount_type.value,
+                "applied_count": max_count,
+                "bundle_price": float(total_bundle),
+                "discount": discount,
+                "final_price": float(total_bundle - discount),
+                "priority": offer.priority,
+                "stock": stock
+            })
+            
+        return results

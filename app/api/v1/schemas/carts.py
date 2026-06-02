@@ -82,6 +82,7 @@ class CartProductResponse(BaseModel):
     id: int
     product_variant_id: int
     quantity: int
+    quantity_after_combo: int = 0
     unit_price: float
     product_variant: Optional[ProductVariantResponse] = None
     offer: Optional[CartOfferResponse] = None
@@ -94,10 +95,25 @@ class CartProductResponse(BaseModel):
     
     class Config:
         from_attributes = True
-        
+
+class CartComboOffer(BaseModel):
+    id: int
+    name: str
+    discount_type: str
+    applied_count: int
+    bundle_price: float
+    discount: float
+    final_price: float
+    # stackable: bool
+    priority: int
+    
+    class Config:
+        from_attributes = True
+    
 class CartResponse(BaseModel):
     id: int
     user_id: Optional[UUID] = None
+    coupon_id: Optional[int] = None
     status: CartStatus
     cart_products: Optional[List[CartProductResponse]] = None
     subtotal: Optional[float] = 0
@@ -108,6 +124,7 @@ class CartResponse(BaseModel):
     coupon_applicable: Optional[bool] = None
     coupon_message: Optional[str] = None
     coupon_discount_amount: Optional[float] = 0
+    combo_offers: Optional[List[CartComboOffer]] = None
     
     class Config:
         from_attributes = True

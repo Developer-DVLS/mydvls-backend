@@ -212,6 +212,8 @@ class ComboOfferItem(Base):
     quantity = Column(Integer, default=1)
 
     offer = relationship("ComboOffer", back_populates="items")
+    product_variant = relationship("ProductVariant")
+    product = relationship("Product")
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow,
