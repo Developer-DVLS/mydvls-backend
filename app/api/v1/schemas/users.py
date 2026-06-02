@@ -10,10 +10,10 @@ class UserRegisterRequest(BaseModel):
     last_name: str
     email: EmailStr
     phone: Optional[str] = None
-    role: UserRole
-    bio: str
-    password: str
-    confirm_password: str
+    # role: UserRole
+    # bio: str
+    # password: Optional[str] = None
+    # confirm_password: str
 
 class UserVerified(BaseModel):
     message: str
@@ -77,3 +77,13 @@ class ChangePassword(BaseModel):
     new_password: str
     new_password_again: str
     
+    
+class VerifyOTPRequest(BaseModel):
+    phone: str
+    otp: str
+
+class ResendOTPRequest(BaseModel):
+    phone: str
+    
+class LoginRequest(BaseModel):
+    phone: str

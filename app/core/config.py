@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     #redis
     REDIS_URL: str = os.getenv('REDIS_URL', '')
     
+    #sms server
+    MESSAGE_SERVER: str = os.getenv('MESSAGE_SERVER', '')
+    
     @property
     def tz(self):
         """Return pytz timezone object"""
