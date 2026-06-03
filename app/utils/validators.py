@@ -1,7 +1,7 @@
 import phonenumbers
 from phonenumbers.phonenumberutil import NumberParseException
 
-def is_valid_us_phone(phone: str) -> bool:
+def is_valid_phone(phone: str) -> bool:
     try:
         parsed = phonenumbers.parse(phone, "US")
         return (
