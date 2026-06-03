@@ -14,6 +14,7 @@ from app.models.products import (ProductCategory, Product, ProductVariant, Produ
 from app.models.offers import (Offer, OfferTarget, OfferBOGO, ComboOffer, ComboOfferItem)
 from app.models.carts import (Cart, CartProduct)
 from app.models.delivery import DeliveryConfig
+from app.models.tax import TaxConfig
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

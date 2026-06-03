@@ -8,10 +8,10 @@ from app.models.delivery import DeliveryConfig
 from app.models.user import User
 from app.auth.permissions import staff_only
 from app.core.database import get_db
+from app.services.deliveryservice import DeliveryService
 from app.utils.pagination import get_paginated_result
 
 delivery_router = APIRouter(prefix="/dashboard/delivery-config", tags=['Delivery CRUD'])
-
 
 @delivery_router.post("/", response_model=DeliveryConfigResponse)
 async def create_delivery_config(
@@ -19,6 +19,20 @@ async def create_delivery_config(
     current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ):
+    # validate distance range
+    try:
+        delivery_service = DeliveryService(db=db)
+        await delivery_service.validate_distance_range(
+            min_distance = data.min_distance,
+            max_distance = data.max_distance
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+        
+        
     delivery_config = DeliveryConfig(
         min_distance = data.min_distance,
         max_distance = data.max_distance,
@@ -83,6 +97,20 @@ async def update_delivery_config(
             status_code=404,
             detail="Delivery config not found"
         )
+    
+    # validate distance range
+    try:
+        delivery_service = DeliveryService(db=db)
+        await delivery_service.validate_distance_range(
+            min_distance = data.min_distance,
+            max_distance = data.max_distance,
+            exclude_id=delivery_id
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
         
     # apply only provided fields
     for field, value in data.model_dump(exclude_unset=True).items():
@@ -115,6 +143,6 @@ async def get_delivery_config(
 
     return {
         "status": True,
-        "message": "Offer deleted successfully"
+        "message": "Delivery config deleted successfully"
     }
         
