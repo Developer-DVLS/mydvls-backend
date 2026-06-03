@@ -13,6 +13,7 @@ from app.models.media import Media
 from app.models.products import (ProductCategory, Product, ProductVariant, ProductAttribute, ProductVariantImage)
 from app.models.offers import (Offer, OfferTarget, OfferBOGO, ComboOffer, ComboOfferItem)
 from app.models.carts import (Cart, CartProduct)
+from app.models.delivery import DeliveryConfig
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
