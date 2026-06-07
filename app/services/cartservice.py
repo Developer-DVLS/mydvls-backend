@@ -4,7 +4,7 @@ from decimal import Decimal
 import json
 import uuid
 from fastapi import HTTPException, Request, Response
-from sqlalchemy import and_, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -75,6 +75,31 @@ class CartService:
 
         return await self.remove_redis_cart(request, cart_product_id)
     
+    # CLEAR CART
+    async def clear(
+        self,
+        request: Request,
+        db: AsyncSession, 
+        user_id=None
+    ):
+        if user_id:
+            return await self.clear_db_cart_item(db, user_id)
+        return await self.clear_redis_cart(request)
+    
+    
+    # REMOVE COMBO OFFER ITEM FROM CART
+    async def remove_combo_item(
+        self, 
+        request: Request,
+        db: AsyncSession,  
+        quantity: int, 
+        product_variation_id: int = None, 
+        user_id=None
+    ):
+        if user_id:
+            return await self.remove_combo_from_cart(db, user_id, product_variation_id, quantity)
+
+        return await self.remove_redis_combo_item(request, product_variation_id, quantity)
     
     # ======================================================
     # REDIS CACHE CART (GUEST USER)
@@ -231,7 +256,44 @@ class CartService:
             if item["id"] != cart_product_id
         ]
 
+        await set_cache(redis_cache_key, cart, self.GUEST_CART_EXPIRY)
+
+        return cart
+    
+    #clear cache cart
+    async def clear_redis_cart(
+        self, 
+        request: Request
+    ):
+        # get redis cache key from cookie
+        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+        cart = await get_cache(redis_cache_key)
+
+        await delete_cache(redis_cache_key)
+
+        return cart
+    
+    # remove combo offer items from cart
+    async def remove_redis_combo_item(
+        self, 
+        request: Request,
+        product_variant_id: int, 
+        quantity: int
+    ):      
+        # get redis cache key from cookie
+        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+        
+        cart = await self.get_redis_cart(request)
+        items = cart.get("cart_products", [])
+
+        for item in items:
+            if item["product_variant_id"] == product_variant_id:
+                item["quantity"] = item["quantity"] - quantity
+                if item["quantity"] <= 0:
+                    items.remove(item)
+
         cart["cart_products"] = items
+        
         await set_cache(redis_cache_key, cart, self.GUEST_CART_EXPIRY)
 
         return cart
@@ -393,7 +455,7 @@ class CartService:
     
     async def remove_db_cart_item(self, db: AsyncSession, user_id, cart_product_id):
         cart = await self.get_or_create_db_cart(db, user_id)
-        
+
         result = await db.execute(
             select(CartProduct).where(CartProduct.id == cart_product_id)
         )
@@ -405,7 +467,50 @@ class CartService:
         await db.delete(cart_product)
         await db.commit()
         return cart
+
+    async def clear_db_cart_item(self, db: AsyncSession, user_id):
+        cart = await self.get_or_create_db_cart(db, user_id)
+        
+        await db.execute(
+            delete(CartProduct)
+            .where(CartProduct.cart_id == cart.id)
+        )
+
+        await db.commit()
     
+    # remove_combo_from_cart
+    async def remove_combo_from_cart(self, db: AsyncSession, user_id, product_variant_id, quantity):
+        cart = await self.get_or_create_db_cart(db, user_id)
+
+        result = await db.execute(
+            select(CartProduct)
+            .where(
+                CartProduct.cart_id == cart.id,
+                CartProduct.product_variant_id == product_variant_id
+                )
+            )
+        item = result.scalars().first()
+
+        if item:
+            item.quantity = item.quantity - quantity
+            if item.quantity <= 0:
+                await db.delete(item)
+            await db.commit()
+            
+        result = await db.execute(
+        select(Cart)
+            .options(
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.product)
+                .selectinload(Product.category),
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.images),
+            )
+            .where(Cart.id == cart.id)
+        )
+        return result.scalars().first()
     
     # ======================================================
     # CART COUNT
@@ -597,11 +702,13 @@ class CartService:
             cart = await self.coupon_validation(request, db, cart, coupon_code, user_id)
 
         #tax calculation
-        tax_percent = self.tax_calculation(db)
+        tax_percent = await self.tax_calculation(db)
         if tax_percent:
+            tax_amount = cart.total_amount * (tax_percent /100)
             cart.tax_percent = tax_percent
+            cart.tax_amount = tax_amount
             #total after adding tax 
-            cart.total_amount = cart.total_amount + (cart.total_amount * (tax_percent /100))
+            cart.total_amount = cart.total_amount + tax_amount
         
         return cart
     
@@ -611,6 +718,7 @@ class CartService:
         discounted_amount = 0
         total_amount = 0
         tax_percent = 0.00
+        tax_amount = 0
         
         for cart_product in cart.cart_products:
             subtotal += cart_product.subtotal
@@ -621,6 +729,7 @@ class CartService:
         cart.discount_amount = discount_amount
         cart.discounted_amount = discounted_amount
         cart.tax_percent = tax_percent
+        cart.tax_amount = tax_amount
         
         #calculate total
         total_amount = subtotal - discount_amount
@@ -1081,13 +1190,26 @@ class CartService:
                 "discount": discount,
                 "final_price": float(total_bundle - discount),
                 "priority": offer.priority,
-                "stock": stock
+                "stock": stock,
+                "items": [{
+                    "id": item.id,
+                    "product_variant_id": item.product_variant_id,
+                    "quantity": item.quantity,
+                    "product_variant": {
+                        "id": item.product_variant.id,
+                        "sku": item.product_variant.sku,
+                        "price": item.product_variant.price,
+                        "image": item.product_variant.images[0].image_url  if item.product_variant.images else None,
+                        "product_name": item.product_variant.product.name
+                    }
+                }
+                    for item in offer.items]
             })
             
         return results
     
     # ======================================================
-    # Tax calculation
+    # Product Tax calculation
     # ======================================================
     async def tax_calculation(
         self, 
@@ -1096,12 +1218,14 @@ class CartService:
         tax_result = await db.execute(
             select(TaxConfig)
             .where(
-                TaxConfig.tax_scope in (TaxScope.PRODUCT, TaxScope.GLOBAL),
-                TaxConfig.is_active == True
+                TaxConfig.tax_scope.in_([TaxScope.PRODUCT, TaxScope.GLOBAL]),
+                TaxConfig.is_active.is_(True)
             )
         )
-        tax = tax_result.scalars().first()
-        if not tax:
-            return None
+        taxes = tax_result.scalars().all()
+        if not taxes:
+            return 0.0
+
+        total_tax_percent = sum(float(tax.tax_percentage) for tax in taxes)
         
-        return tax.tax_percentage 
+        return total_tax_percent

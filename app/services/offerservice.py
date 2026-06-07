@@ -451,3 +451,28 @@ async def valid_combo_offers(db):
 
     combo_offers = query.scalars().all()    
     return combo_offers
+
+async def validate_combo_offer(db, combo_offer_id):
+    now = datetime.utcnow()
+    
+    query = await db.execute(
+        select(ComboOffer)
+        .options(
+            selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant),
+            selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product)
+        )
+        .where(
+            ComboOffer.id == combo_offer_id,
+            ComboOffer.is_active == True,
+            ComboOffer.start_date <= now,
+            ComboOffer.end_date >= now,
+        )
+    )
+    
+    offer = query.scalars().first()
+    if not offer:
+        return None
+    
+    return offer

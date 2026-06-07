@@ -1,10 +1,13 @@
+import select
 from typing import Optional
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.schemas.carts import CartResponse
 from app.core.database import get_db
+from app.models.offers import ComboOffer
 from app.services.cartservice import CartService
+from app.services.offerservice import validate_combo_offer
 from app.services.security import get_current_user_optional
 
 cart_router = APIRouter(prefix="/cart", tags=["Cart"])
@@ -115,3 +118,93 @@ async def delete_cart_product(
         "status": True,
         "message": "Item deleted successfully"
     }
+
+@cart_router.delete("/clear-cart/")
+async def clear_cart(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user = Depends(get_current_user_optional)
+):
+    user_id = user.id if user else None
+
+    await cart_service.clear(
+        request=request,
+        db=db,  
+        user_id=user_id
+    )
+    
+    return {
+        "status": True,
+        "message": "Cart cleared."
+    }
+
+
+## add combo offer product_variant in cart
+@cart_router.post("/add-combo-to-cart/")
+async def add_combo_to_cart(
+    request: Request,
+    response: Response,
+    combo_offer_id: int,
+    db: AsyncSession = Depends(get_db),
+    user = Depends(get_current_user_optional)
+):
+    user_id = user.id if user else None
+    
+    # get combo offer 
+    combo_offer = await validate_combo_offer(db, combo_offer_id)
+    
+    if combo_offer:
+        for item in combo_offer.items:            
+            await cart_service.add(
+                request=request,
+                response=response,
+                db=db,
+                product_variant_id=item.product_variant_id,
+                quantity=item.quantity,
+                user_id=user_id
+            )
+        
+        return {
+            "status": True,
+            "message": "Items added successfully"
+        }
+    
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid combo offer."
+    )
+    
+## remove combo offer product_variant in cart
+@cart_router.delete("/remove-combo-from-cart/")
+async def remove_combo_from_cart(
+    request: Request,
+    response: Response,
+    combo_offer_id: int,
+    db: AsyncSession = Depends(get_db),
+    user = Depends(get_current_user_optional)
+):
+    user_id = user.id if user else None
+    
+    # get combo offer 
+    combo_offer = await validate_combo_offer(db, combo_offer_id)
+    
+    if combo_offer:
+        for item in combo_offer.items:   
+            print("!!!", item.quantity)         
+            await cart_service.remove_combo_item(
+                request=request,
+                db=db,  
+                quantity=item.quantity, 
+                product_variation_id=item.product_variant_id, 
+                user_id=user_id
+            )
+        
+        return {
+            "status": True,
+            "message": "Items removed successfully"
+        }
+    
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid combo offer."
+    )

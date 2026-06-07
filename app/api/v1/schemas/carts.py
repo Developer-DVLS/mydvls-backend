@@ -95,6 +95,14 @@ class CartProductResponse(BaseModel):
     
     class Config:
         from_attributes = True
+        
+class CartComboOfferItem(BaseModel):
+    id: int
+    product_variant_id: int 
+    quantity: int
+    
+    class Config:
+        from_attributes = True
 
 class CartComboOffer(BaseModel):
     id: int
@@ -106,6 +114,7 @@ class CartComboOffer(BaseModel):
     final_price: float
     # stackable: bool
     priority: int
+    items: List[CartComboOfferItem]
     
     class Config:
         from_attributes = True
@@ -119,6 +128,8 @@ class CartResponse(BaseModel):
     subtotal: Optional[float] = 0
     discount_amount: Optional[float] = 0
     discounted_amount: Optional[float] = 0
+    tax_percent: Optional[float] = 0.00
+    tax_amount: Optional[float] = 0.00
     total_amount: Optional[float] = 0
     coupon_applied: Optional[bool] = False
     coupon_applicable: Optional[bool] = None
