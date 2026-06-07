@@ -12,6 +12,7 @@ from app.api.v1.schemas.carts import CartBOGOFreeItem, CartBOGOMeta, CartGetItem
 from app.models.carts import Cart, CartProduct, CartStatus
 from app.models.offers import ComboDiscountType, ComboOffer, DiscountType, Offer, OfferType
 from app.models.products import Product, ProductCategory, ProductVariant
+from app.models.tax import TaxConfig, TaxScope
 from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer, valid_combo_offers
 from app.utils.cache import delete_cache, get_cache, set_cache
 
@@ -465,6 +466,7 @@ class CartService:
         cart = await self._attach_products(db, cart)
         
         # check for combo offer
+        combo_offers = None
         valid_combo_offers_result = await valid_combo_offers(db)
         if valid_combo_offers_result:
             combo_offers =  self.apply_combo_offers(
@@ -485,9 +487,7 @@ class CartService:
                     continue
                 if cart_product.quantity_after_combo <= 0:
                     continue
-                
-                print("quantity_after_combo!!!!",cart_product.quantity, cart_product.quantity_after_combo)
-                
+                                
                 product_variant = (
                     ProductVariantResponse(**cart_product.product_variant)
                     if isinstance(cart_product.product_variant, dict)
@@ -582,7 +582,6 @@ class CartService:
                 total_bundle_price += combo_offer['bundle_price']
                 total_final_price += combo_offer['final_price']
 
-            print("cart!!", cart.total_amount)
             cart.total_amount -= total_bundle_price
             cart.total_amount += total_final_price
 
@@ -597,6 +596,13 @@ class CartService:
         else:
             cart = await self.coupon_validation(request, db, cart, coupon_code, user_id)
 
+        #tax calculation
+        tax_percent = self.tax_calculation(db)
+        if tax_percent:
+            cart.tax_percent = tax_percent
+            #total after adding tax 
+            cart.total_amount = cart.total_amount + (cart.total_amount * (tax_percent /100))
+        
         return cart
     
     def calculate_cart_total(self, cart):
@@ -604,6 +610,7 @@ class CartService:
         discount_amount = 0
         discounted_amount = 0
         total_amount = 0
+        tax_percent = 0.00
         
         for cart_product in cart.cart_products:
             subtotal += cart_product.subtotal
@@ -613,6 +620,7 @@ class CartService:
         cart.subtotal = subtotal
         cart.discount_amount = discount_amount
         cart.discounted_amount = discounted_amount
+        cart.tax_percent = tax_percent
         
         #calculate total
         total_amount = subtotal - discount_amount
@@ -1077,3 +1085,23 @@ class CartService:
             })
             
         return results
+    
+    # ======================================================
+    # Tax calculation
+    # ======================================================
+    async def tax_calculation(
+        self, 
+        db: AsyncSession,
+    ):
+        tax_result = await db.execute(
+            select(TaxConfig)
+            .where(
+                TaxConfig.tax_scope in (TaxScope.PRODUCT, TaxScope.GLOBAL),
+                TaxConfig.is_active == True
+            )
+        )
+        tax = tax_result.scalars().first()
+        if not tax:
+            return None
+        
+        return tax.tax_percentage 

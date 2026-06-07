@@ -104,6 +104,7 @@ async def user_register(background_tasks: BackgroundTasks, data:UserRegisterRequ
         
 @user_router.post("/auth/verify-otp/")
 async def verify_otp(
+    request: Request,
     response: Response,
     data: VerifyOTPRequest,
     db: AsyncSession = Depends(get_db)
@@ -138,6 +139,10 @@ async def verify_otp(
                         httponly=False, samesite="none", secure=True, max_age=86400, )
     response.set_cookie(key="refresh_token", value=refresh_token,
                         httponly=False, samesite="none", secure=True, max_age=86400, )
+    
+     # sync session cart
+    cart_service = CartService()
+    await cart_service.cart_sync_on_login(request, response, db, user.id)
 
     return {
         "message": "OTP verified successfully.",
