@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.offers import ComboDiscountType, ComboOffer, ComboOfferItem, Offer, OfferBOGO, OfferTarget, OfferType, TargetType
-from app.models.products import Product, ProductCategory
+from app.models.products import Product, ProductCategory, ProductVariant
 
 
 async def validate_offer_conflict(
@@ -439,7 +439,7 @@ async def valid_combo_offers(db):
         select(ComboOffer)
         .options(
             selectinload(ComboOffer.items)
-            .selectinload(ComboOfferItem.product_variant)
+            .selectinload(ComboOfferItem.product_variant).selectinload(ProductVariant.product)
         )
         .where(
             ComboOffer.is_active == True,

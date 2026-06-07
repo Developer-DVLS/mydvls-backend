@@ -172,15 +172,34 @@ class ComboOfferItemBase(BaseModel):
 class ComboOfferCreate(ComboOfferBase):
     items: List[ComboOfferItemBase]
 
-class ComboOfferItemResponse(ComboOfferItemBase):
-    id: int
-    
-    class Config:
-        from_attributes = True
-
 class ComboOfferItemCreate(ComboOfferItemBase):
     combo_offer_id: int
 
+class ComboOfferProductVariantProduct(BaseModel):
+    id: int
+    name: str 
+    
+    class Config:
+        from_attributes = True
+    
+class ComboOfferProductVariant(BaseModel):
+    id: int 
+    sku: str
+    price: float
+    product: ComboOfferProductVariantProduct
+    
+    class Config:
+        from_attributes = True
+        
+class ComboOfferItemResponse(ComboOfferItemBase):
+    id: int
+    product_variant: Optional[ComboOfferProductVariant] = None
+    # combo_offer_id: int
+    created_at: datetime
+    updated_at:  datetime
+    
+    class Config:
+        from_attributes = True
 class ComboOfferResponse(ComboOfferBase):
     id: int
     items: Optional[List[ComboOfferItemResponse]] = None
@@ -189,16 +208,7 @@ class ComboOfferResponse(ComboOfferBase):
     
     class Config:
         from_attributes = True
-
-class ComboOfferItemResponse(ComboOfferItemBase):
-    id: int
-    combo_offer_id: int
-    created_at: datetime
-    updated_at:  datetime
-    
-    class Config:
-        from_attributes = True
-
+        
 class PaginatedComboOfferResponse(BaseModel):
     total: int
     skip: int
