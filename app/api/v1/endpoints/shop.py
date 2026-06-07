@@ -1,15 +1,16 @@
 import json
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.v1.schemas.offers import ComboOfferResponse
 from app.api.v1.schemas.shop import PaginatedShopProductResponse, ShopProductDetailResponse
 from app.core.database import get_db
 from app.models.offers import OfferType
 from app.models.products import Product, ProductVariant
-from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer
+from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer, valid_combo_offers
 from app.services.shopservice import ShopService
 from app.utils.cache import get_cache, set_cache
 from app.utils.pagination import get_paginated_result
@@ -311,3 +312,13 @@ async def product_detail(
             variant.best_offer = best_offer_data
     
     return result
+
+
+@shop_router.get("/combo-offers/", response_model=List[ComboOfferResponse])
+async def list_combo_offer(
+    db: AsyncSession = Depends(get_db)
+):
+    combo_offers = await valid_combo_offers(db)
+    if not combo_offers:
+        return []
+    return combo_offers
