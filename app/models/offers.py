@@ -155,6 +155,7 @@ class ComboOffer(Base):
 
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
 
     is_active = Column(Boolean, default=True)
 

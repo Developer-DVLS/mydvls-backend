@@ -152,6 +152,7 @@ class ComboOfferBase(BaseModel):
     discount_value: float
     priority: int
     stackable: bool 
+    image_url: Optional[str] = None
     
     @field_validator("start_date", "end_date", mode="before")
     @classmethod
@@ -178,6 +179,7 @@ class ComboOfferItemCreate(ComboOfferItemBase):
 class ComboOfferProductVariantProduct(BaseModel):
     id: int
     name: str 
+    description: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -225,6 +227,7 @@ class ComboOfferUpdate(BaseModel):
     discount_value: Optional[float] = None
     priority: Optional[int] = None
     stackable: Optional[bool] = None 
+    image_url: Optional[str] = None
     
     @field_validator("start_date", "end_date", mode="before")
     @classmethod
@@ -236,3 +239,57 @@ class ComboOfferUpdate(BaseModel):
             return v.replace(tzinfo=None)
 
         return v
+
+## Combo offer 
+class ComboOfferProductVariantProductDetail(BaseModel):
+    id: int
+    name: str 
+    description: str
+    is_active: bool
+    is_featured: bool
+    
+    class Config:
+        from_attributes = True
+
+class ProductVariantAttributeDetail(BaseModel):
+    id: int
+    key: str
+    value: str
+    
+    class Config:
+        from_attributes = True
+
+class ProductVariantImagesDetail(BaseModel):
+    image_url: str
+    
+    class Config:
+        from_attributes = True
+    
+class ComboOfferProductVariantDetail(BaseModel):
+    id: int 
+    sku: str
+    price: float
+    cost_price: float
+    margin: float
+    stock_quantity: int
+    is_active: bool
+    is_featured: bool
+    product: ComboOfferProductVariantProduct
+    attributes: Optional[List[ProductVariantAttributeDetail]] = None
+    images: Optional[List[ProductVariantImagesDetail]] = None
+    
+    class Config:
+        from_attributes = True
+        
+class ComboOfferItemDetailResponse(ComboOfferItemBase):
+    id: int
+    product_variant: Optional[ComboOfferProductVariantDetail] = None
+    # combo_offer_id: int
+    created_at: datetime
+    updated_at:  datetime
+     
+class ComboOfferDetailResponse(ComboOfferBase):
+    id: int
+    items: Optional[List[ComboOfferItemDetailResponse]] = None
+    created_at: datetime
+    updated_at:  datetime

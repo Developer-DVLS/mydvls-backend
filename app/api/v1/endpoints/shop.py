@@ -6,7 +6,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.offers import ComboOfferResponse, PaginatedComboOfferResponse
+from app.api.v1.schemas.offers import ComboOfferDetailResponse, ComboOfferResponse, PaginatedComboOfferResponse
 from app.api.v1.schemas.shop import PaginatedShopProductResponse, ShopProductDetailResponse
 from app.core.database import get_db
 from app.models.offers import ComboOffer, ComboOfferItem, OfferType
@@ -338,3 +338,40 @@ async def list_combo_offer(
     )
     
     return await get_paginated_result(db, query, skip, limit)
+
+@shop_router.get("/combo-offers/{offer_id}/", response_model=ComboOfferDetailResponse)
+async def list_combo_offer(
+    offer_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    now = datetime.utcnow()
+    
+    result = await db.execute(
+        select(ComboOffer)
+        .options(
+            selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant)
+            .selectinload(ProductVariant.product),
+            selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant)
+            .selectinload(ProductVariant.attributes),
+            selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant)
+            .selectinload(ProductVariant.images),
+        )
+        .where(
+            ComboOffer.id == offer_id,
+            ComboOffer.is_active == True,
+            ComboOffer.start_date <= now,
+            ComboOffer.end_date >= now,
+        )
+        .order_by(ComboOffer.priority)
+    )
+    combo_offer = result.scalars().first()
+    if not combo_offer:
+        raise HTTPException(
+            status_code= 404,
+            detail="Combo offer not found"
+        )
+    
+    return combo_offer
