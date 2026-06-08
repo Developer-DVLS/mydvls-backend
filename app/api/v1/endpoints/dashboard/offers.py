@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.schemas.offers import  ComboOfferCreate, ComboOfferItemCreate, ComboOfferItemResponse, ComboOfferResponse, ComboOfferUpdate, OfferBOGOResponse, OfferBOGOUpdate, OfferCreate, OfferResponse, OfferTargetResponse, OfferTargetUpdate, OfferUpdate, PaginatedComboOfferResponse, PaginatedOfferResponse
 from app.core.database import get_db
 from app.models.offers import ComboDiscountType, ComboOffer, ComboOfferItem, Offer, OfferBOGO, OfferTarget, OfferType, TargetType
+from app.models.products import ProductVariant
 from app.models.user import User
 from app.services.offerservice import check_active_offer, validate_dates, validate_discount, validate_offer, validate_offer_conflict, validate_target_exists
 from app.utils.cache import delete_cache
@@ -403,6 +404,8 @@ async def create_combo_offer(
         select(ComboOffer)
         .options(
             selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant)
+            .selectinload(ProductVariant.product)
         )
         .where(ComboOffer.id == combo_offer.id)
     )
@@ -420,7 +423,9 @@ async def list_combo_offer(
     db: AsyncSession = Depends(get_db),
 ):
     query = select(ComboOffer).options(
-        selectinload(ComboOffer.items),
+        selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant)
+            .selectinload(ProductVariant.product)
     ).order_by(ComboOffer.created_at.desc())
     
     #filters
@@ -442,6 +447,8 @@ async def get_combo_offer(
 ):
     query = select(ComboOffer).options(
         selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant)
+            .selectinload(ProductVariant.product)
     ).where(ComboOffer.id == offer_id)
     result = await db.execute(query)
     return result.scalars().first()
@@ -482,6 +489,8 @@ async def update_combo_offer(
         select(ComboOffer)
         .options(
             selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant)
+            .selectinload(ProductVariant.product)
         )
         .where(ComboOffer.id == combo_offer.id)
     )

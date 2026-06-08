@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -5,10 +6,10 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.offers import ComboOfferResponse
+from app.api.v1.schemas.offers import ComboOfferResponse, PaginatedComboOfferResponse
 from app.api.v1.schemas.shop import PaginatedShopProductResponse, ShopProductDetailResponse
 from app.core.database import get_db
-from app.models.offers import OfferType
+from app.models.offers import ComboOffer, ComboOfferItem, OfferType
 from app.models.products import Product, ProductVariant
 from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer, valid_combo_offers
 from app.services.shopservice import ShopService
@@ -314,11 +315,26 @@ async def product_detail(
     return result
 
 
-@shop_router.get("/combo-offers/", response_model=List[ComboOfferResponse])
+@shop_router.get("/combo-offers/", response_model=PaginatedComboOfferResponse)
 async def list_combo_offer(
+    skip: int = Query(0, ge=0, description="Number of items to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     db: AsyncSession = Depends(get_db)
 ):
-    combo_offers = await valid_combo_offers(db)
-    if not combo_offers:
-        return []
-    return combo_offers
+    now = datetime.utcnow()
+    
+    query = (
+        select(ComboOffer)
+        .options(
+            selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant).selectinload(ProductVariant.product)
+        )
+        .where(
+            ComboOffer.is_active == True,
+            ComboOffer.start_date <= now,
+            ComboOffer.end_date >= now,
+        )
+        .order_by(ComboOffer.priority)
+    )
+    
+    return await get_paginated_result(db, query, skip, limit)
