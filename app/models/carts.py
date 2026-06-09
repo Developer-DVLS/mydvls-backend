@@ -28,6 +28,7 @@ class Cart(Base):
     # relationships
     cart_products = relationship("CartProduct", back_populates="cart", cascade="all, delete-orphan")
     user = relationship("User")
+    order = relationship("Order", back_populates="cart", uselist=False)
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow,

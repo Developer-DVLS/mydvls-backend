@@ -3,8 +3,10 @@ import uuid
 from fastapi import Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.v1.endpoints.cart import get_cart
+from app.api.v1.schemas.carts import CartResponse
 from app.api.v1.schemas.orders import OrderCreate
 from app.models.carts import CartProduct
 from app.models.orders import Order, OrderItem
@@ -32,6 +34,7 @@ class OrderService:
 
         user_service = UserService(self.db)
         cart_service = CartService()
+        cart = None
         
         # Get cart
         cart = await cart_service.get_cart(
@@ -39,7 +42,11 @@ class OrderService:
             self.db, 
             user.id if user else None
             )
-        if not cart["cart_products"]:
+        # normalize
+        if not isinstance(cart, CartResponse):
+            cart = CartResponse.model_validate(cart)
+        
+        if not cart.cart_products:
             raise ValueError("Cart is Empty")
         
         # validate user auth
@@ -54,11 +61,14 @@ class OrderService:
             
             # assign cart to guest-user
             # sync session cart
-            await cart_service.cart_sync_on_login(request, response, self.db, user.id) 
+            cart = await cart_service.cart_sync_on_login(request, response, self.db, user.id) 
+            if not cart:
+                raise ValueError("Cart is Empty")
 
         # Create order
         order = Order(
             user_id = user.id,
+            cart_id = cart.id,
             order_number = str(uuid.uuid4()),
             subtotal = data.subtotal,
             tax_amount = data.tax_amount,
@@ -79,7 +89,8 @@ class OrderService:
             country = data.country,
             latitude = data.longitude,
             longitude = data.longitude,
-            delivery_distance = None
+            delivery_distance = None,
+            payment_status="pending"
         )
 
         self.db.add(order)
@@ -88,10 +99,10 @@ class OrderService:
         # Get cart items
         items_result = await self.db.execute(
             select(CartProduct)
-            .where(CartProduct.cart_id == cart["id"])
+            .where(CartProduct.cart_id == cart.id)
         )
         cart_items = items_result.scalars().all()
-
+        print("cart_items!!", cart_items)
         # Create order items
         for item in cart_items:
             order_item = OrderItem(
@@ -105,5 +116,16 @@ class OrderService:
 
         await self.db.commit()
         await self.db.refresh(order)
+        
+        result = await self.db.execute(
+            select(Order)
+            .options(
+                selectinload(Order.user),
+                selectinload(Order.cart),
+                selectinload(Order.items)
+            )
+            .where(Order.id == order.id)
+        )
+        order = result.scalars().first()
 
         return order

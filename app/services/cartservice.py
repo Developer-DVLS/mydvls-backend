@@ -541,10 +541,11 @@ class CartService:
         redis_cart = await self.get_redis_cart(request)
 
         if not redis_cart.get("cart_products"):
-            return
+            return None
 
+        cart = None
         for item in redis_cart["cart_products"]:
-            await self.add_to_db_cart(
+            cart = await self.add_to_db_cart(
                 db,
                 user_id,
                 item["product_variant_id"],
@@ -555,6 +556,8 @@ class CartService:
         await delete_cache(redis_cache_key)
         # delete cart cookie
         response.delete_cookie(key=self.SESSION_COOKIE_KEY)
+        
+        return cart
         
     # ======================================================
     # Calculate offers and totals

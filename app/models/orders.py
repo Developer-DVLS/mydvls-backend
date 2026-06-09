@@ -37,6 +37,7 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey(
         "users.id", ondelete="SET NULL"), nullable=False, index=True)
+    cart_id = Column(Integer, ForeignKey("carts.id"), nullable=True, unique=True)
 
     # Order number (business-specific, human-readable)
     order_number = Column(String(50), nullable=True, unique=True, index=True)
@@ -88,6 +89,8 @@ class Order(Base):
 
     # Customer relationship
     user = relationship("User")
+    #cart relationship
+    cart = relationship("Cart", back_populates="order")
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow,

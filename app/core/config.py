@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     #sms server
     MESSAGE_SERVER: str = os.getenv('MESSAGE_SERVER', '')
     
+    
+    # authorize.net keys
+    API_LOGIN_ID: str = os.getenv('API_LOGIN_ID', '')
+    TRANSACTION_KEY: str = os.getenv('TRANSACTION_KEY', '')
+    ENDPOINT_URL: str = os.getenv('ENDPOINT_URL', '')
+    
     @property
     def tz(self):
         """Return pytz timezone object"""
