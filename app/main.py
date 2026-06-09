@@ -24,6 +24,7 @@ from app.api.v1.endpoints.dashboard.delivery import delivery_router
 from app.api.v1.endpoints.dashboard.taxes import tax_router
 from app.api.v1.endpoints.orders import order_router
 from app.api.v1.endpoints.dashboard.orders import admin_order_router
+from app.api.v1.endpoints.dashboard.carts import admin_cart_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -64,6 +65,7 @@ app.include_router(order_router)
 app.include_router(delivery_router)
 app.include_router(tax_router)
 app.include_router(admin_order_router)
+app.include_router(admin_cart_router)
 
 # =========================
 # CORS CONFIGURATION

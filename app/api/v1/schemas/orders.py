@@ -34,7 +34,7 @@ class OrderCreate(OrderBase):
 class OrderResponse(OrderBase):
     id: int
     user_id: UUID
-    cart_id: int
+    cart_id: Optional[int] = None
     order_number: str
     delivery_status: DeliveryStatus
     payment_intent_id: Optional[str] = None
@@ -69,7 +69,7 @@ class OrderItemsResponse(BaseModel):
 class OrderDetailResponse(OrderBase):
     id: int
     user_id: UUID
-    cart_id: int
+    cart_id: Optional[int] = None
     order_number: str
     delivery_status: DeliveryStatus
     payment_intent_id: Optional[str] = None

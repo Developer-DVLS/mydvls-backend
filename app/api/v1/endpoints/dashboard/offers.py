@@ -377,7 +377,8 @@ async def create_combo_offer(
             discount_type = data.discount_type,
             discount_value = data.discount_value,
             priority = data.priority,
-            stackable = data.stackable
+            stackable = data.stackable,
+            image_url = data.image_url
         )
 
         db.add(combo_offer)

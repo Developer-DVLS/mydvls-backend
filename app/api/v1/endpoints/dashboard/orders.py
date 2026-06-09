@@ -1,11 +1,14 @@
+from datetime import datetime
+from typing import Optional
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.schemas.orders import OrderDetailResponse, OrderStatusUpdate, PaginatedOrderResponse
 from app.core.database import get_db
-from app.models.orders import Order, OrderStatus
+from app.models.orders import DeliveryStatus, Order, OrderStatus
 from app.models.user import User
 from app.utils.pagination import get_paginated_result
 from app.auth.permissions import staff_only
@@ -13,12 +16,60 @@ from app.auth.permissions import staff_only
 admin_order_router = APIRouter(prefix="/dashboard/order", tags=['Admin Order'])
 @admin_order_router.get("/", response_model=PaginatedOrderResponse)
 async def list_orders(
+    user_id: Optional[UUID] = None,
+    created_at: Optional[datetime] = None,
+    cart_id: Optional[int] = None,
+    status: Optional[OrderStatus] = None,
+    delivery_status: Optional[DeliveryStatus] = None,
+    search: Optional[str] = Query(
+        None, 
+        description="search by ordernumber, receiver-info, address-info, payment-method"
+        ),
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only)
 ):
     query = select(Order).order_by(Order.created_at)
+    
+    if user_id:
+        query = query.where(Order.user_id == user_id)
+    if created_at:
+        query = query.where(func.date(Order.created_at) == created_at.date())
+    if cart_id:
+        query = query.where(Order.cart_id == cart_id)
+    if status:
+        query = query.where(Order.status == status)
+    if delivery_status:
+        query = query.where(Order.delivery_status == delivery_status)
+    
+    #search query
+    if search:
+        query = query.where(
+            or_(
+            Order.order_number == search,
+            
+            Order.receiver_first_name.ilike(f"%{search}%"),
+            Order.receiver_last_name.ilike(f"%{search}%"),
+            func.concat(
+                Order.receiver_first_name,
+                " ",
+                Order.receiver_last_name
+            ).ilike(f"%{search}%"),
+            Order.receiver_email == search,
+            Order.receiver_phone.ilike(f"%{search}%"),
+            
+            Order.address_line1.ilike(f"%{search}%"),
+            Order.address_line2.ilike(f"%{search}%"),
+            Order.city.ilike(f"%{search}%"),
+            Order.state.ilike(f"%{search}%"),
+            Order.postal_code.ilike(f"%{search}%"),
+            Order.country.ilike(f"%{search}%"),
+            
+            Order.payment_method == search
+            )
+            
+        )
     
     return await get_paginated_result(db, query, skip, limit)
 
