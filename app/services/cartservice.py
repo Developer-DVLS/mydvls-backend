@@ -568,10 +568,6 @@ class CartService:
         # cart = CartResponse(**cart) if isinstance(cart, dict) else cart
         if not isinstance(cart, CartResponse):
             cart = CartResponse.model_validate(cart)
-
-        # attach product-variant and product data 
-        #along with subtotal calculation, (discount amount and discounted_amount initialization)
-        cart = await self._attach_products(db, cart)
         
         # check for combo offer
         combo_offers = None
@@ -582,6 +578,10 @@ class CartService:
                 combo_offers=valid_combo_offers_result
             )
         cart.combo_offers = combo_offers
+        
+        # attach product-variant and product data 
+        #along with subtotal calculation, (discount amount and discounted_amount initialization)
+        cart = await self._attach_products(db, cart)
         
         # check if offer (item, category, store) exists
         # first get all active offers
@@ -772,11 +772,12 @@ class CartService:
             
             # ALWAYS use DB price (source of truth)
             price = float(variant.price)
-            qty = cart_product.quantity
+            # qty = cart_product.quantity
+            qty_after_combo = cart_product.quantity_after_combo
 
-            subtotal = price * qty
+            subtotal = price * qty_after_combo
 
-            cart_product.quantity_after_combo = qty
+            # cart_product.quantity_after_combo = qty
             cart_product.subtotal = subtotal
             cart_product.discount_amount = 0
             cart_product.discounted_amount = subtotal
