@@ -139,3 +139,7 @@ class CartResponse(BaseModel):
     
     class Config:
         from_attributes = True
+        
+class ComboOfferToCart(BaseModel):
+    combo_offer_id: int
+    quantity: int

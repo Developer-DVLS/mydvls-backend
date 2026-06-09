@@ -163,7 +163,7 @@ class ComboOffer(Base):
     end_date = Column(DateTime)
 
     discount_type = Column(Enum(ComboDiscountType), nullable=False)
-    discount_value = Column(Numeric(5, 2), nullable=True)
+    discount_value = Column(Numeric(10, 2), nullable=True)
     
     priority = Column(Integer, default=0)
     stackable = Column(Boolean, default=True)

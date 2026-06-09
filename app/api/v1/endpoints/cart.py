@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.schemas.carts import CartResponse
+from app.api.v1.schemas.carts import CartResponse, ComboOfferToCart
 from app.core.database import get_db
 from app.models.offers import ComboOffer
 from app.services.cartservice import CartService
@@ -144,14 +144,14 @@ async def clear_cart(
 async def add_combo_to_cart(
     request: Request,
     response: Response,
-    combo_offer_id: int,
+    data: ComboOfferToCart,
     db: AsyncSession = Depends(get_db),
     user = Depends(get_current_user_optional)
 ):
     user_id = user.id if user else None
     
     # get combo offer 
-    combo_offer = await validate_combo_offer(db, combo_offer_id)
+    combo_offer = await validate_combo_offer(db, data.combo_offer_id)
     
     if combo_offer:
         for item in combo_offer.items:            
@@ -160,7 +160,7 @@ async def add_combo_to_cart(
                 response=response,
                 db=db,
                 product_variant_id=item.product_variant_id,
-                quantity=item.quantity,
+                quantity=item.quantity * data.quantity,
                 user_id=user_id
             )
         
@@ -179,22 +179,21 @@ async def add_combo_to_cart(
 async def remove_combo_from_cart(
     request: Request,
     response: Response,
-    combo_offer_id: int,
+    data: ComboOfferToCart,
     db: AsyncSession = Depends(get_db),
     user = Depends(get_current_user_optional)
 ):
     user_id = user.id if user else None
     
     # get combo offer 
-    combo_offer = await validate_combo_offer(db, combo_offer_id)
+    combo_offer = await validate_combo_offer(db, data.combo_offer_id)
     
     if combo_offer:
         for item in combo_offer.items:   
-            print("!!!", item.quantity)         
             await cart_service.remove_combo_item(
                 request=request,
                 db=db,  
-                quantity=item.quantity, 
+                quantity=item.quantity * data.quantity, 
                 product_variation_id=item.product_variant_id, 
                 user_id=user_id
             )
