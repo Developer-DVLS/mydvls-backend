@@ -36,6 +36,7 @@ class OrderResponse(OrderBase):
     user_id: UUID
     cart_id: Optional[int] = None
     order_number: str
+    status: OrderStatus
     delivery_status: DeliveryStatus
     payment_intent_id: Optional[str] = None
     payment_status: Optional[str] = None
@@ -71,6 +72,7 @@ class OrderDetailResponse(OrderBase):
     user_id: UUID
     cart_id: Optional[int] = None
     order_number: str
+    status: OrderStatus
     delivery_status: DeliveryStatus
     payment_intent_id: Optional[str] = None
     payment_status: Optional[str] = None
