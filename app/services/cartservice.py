@@ -686,12 +686,16 @@ class CartService:
         if combo_offers:
             total_bundle_price = 0
             total_final_price = 0
+            total_combo_discount = 0
             for combo_offer in combo_offers:
                 total_bundle_price += combo_offer['bundle_price']
                 total_final_price += combo_offer['final_price']
-
-            cart.total_amount -= total_bundle_price
-            cart.total_amount += total_final_price
+                total_combo_discount += combo_offer['discount']
+            
+            cart.subtotal += total_bundle_price
+            cart.discount_amount += total_combo_discount
+            cart.discounted_amount += total_final_price
+            cart.total_amount += total_final_price            
 
         # coupon validation
         if remove_coupon:

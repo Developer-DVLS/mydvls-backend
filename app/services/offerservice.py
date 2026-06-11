@@ -439,7 +439,9 @@ async def valid_combo_offers(db):
         select(ComboOffer)
         .options(
             selectinload(ComboOffer.items)
-            .selectinload(ComboOfferItem.product_variant).selectinload(ProductVariant.product)
+            .selectinload(ComboOfferItem.product_variant).selectinload(ProductVariant.product),
+            selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant).selectinload(ProductVariant.images)
         )
         .where(
             ComboOffer.is_active == True,
