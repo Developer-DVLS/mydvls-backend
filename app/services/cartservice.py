@@ -631,7 +631,7 @@ class CartService:
                         cart_product_response.discounted_amount = discounted_amount
                     # handle bogo offer accordingly
                     elif cart_product_response.offer.type == OfferType.BOGO:
-                        if cart_product_response.quantity != cart_product_response.offer.bogo_meta.buy_quantity:
+                        if cart_product_response.quantity <= cart_product_response.offer.bogo_meta.buy_quantity:
                             cart_product_response.offer = None
                             continue
                         
@@ -679,6 +679,9 @@ class CartService:
                                 description=get_item.product.description,
                             )
                         )
+                        
+                        # mark boolean for bogo in cart
+                        cart.bogo_offer_exists = True
         
         # recalculate total cart totals
         cart = self.calculate_cart_total(cart)
@@ -693,7 +696,7 @@ class CartService:
                 total_combo_discount += combo_offer['discount']
             
             cart.subtotal += total_bundle_price
-            # cart.discount_amount += total_combo_discount
+            cart.total_discount_amount += total_combo_discount
             cart.discounted_amount += total_final_price
             cart.total_amount += total_final_price            
 
@@ -735,6 +738,7 @@ class CartService:
         cart.subtotal = subtotal
         cart.discount_amount = discount_amount
         cart.discounted_amount = discounted_amount
+        cart.total_discount_amount = discount_amount
         cart.tax_percent = tax_percent
         cart.tax_amount = tax_amount
         
@@ -914,6 +918,8 @@ class CartService:
         cart.coupon_message = "Coupon applied."
         cart.coupon_discount_amount = coupon_discount_amount
         
+        cart.total_discount_amount += coupon_discount_amount
+        
         cart.total_amount = cart.total_amount - coupon_discount_amount
             
         return cart
@@ -1029,7 +1035,8 @@ class CartService:
             }
 
         # 3. Total quantity in cart
-        quantity = cart_product_response.quantity
+        # quantity = cart_product_response.quantity
+        quantity = cart_product_response.quantity_after_combo
         unit_price = float(cart_product_response.unit_price)
 
         # 4. Eligible sets

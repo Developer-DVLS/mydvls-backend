@@ -25,7 +25,7 @@ async def list_carts(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only)
 ):
-    query = select(Cart).order_by(Cart.created_at)
+    query = select(Cart).order_by(Cart.created_at.desc())
     
     if user_id:
         query = query.where(Cart.user_id == user_id)

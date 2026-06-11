@@ -6,10 +6,11 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.orders import OrderCreate
+from app.api.v1.schemas.orders import OrderCreate, OrderDetailResponse
 from app.api.v1.schemas.payment import ChargeRequest
 from app.core.database import get_db
 from app.models.carts import CartStatus
+from app.models.orders import Order
 from app.models.user import User
 from app.services.orderservice import OrderService
 from app.services.paymentservice import PaymentService
@@ -66,6 +67,7 @@ async def create_order(
         
         return {
             "order_id": order.id, 
+            "order_number": order.order_number,
             "status": "paid",
             "transaction_id": result["transactionId"],
             "auth_code": result["authCode"],
@@ -82,6 +84,24 @@ async def create_order(
             status_code=402, 
             detail=str(e)
             )
+
+@order_router.get("/order/{order_number}/", response_model=OrderDetailResponse)
+async def get_order_by_order_number(
+    order_number: int,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Order)
+        .where(Order.order_number == order_number)
+    )
+    order = result.scalars().first()
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found."
+        )
+
+    return order
 
 from app.core.config import settings
 @order_router.get("get_token")

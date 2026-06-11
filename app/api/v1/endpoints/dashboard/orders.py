@@ -30,7 +30,7 @@ async def list_orders(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only)
 ):
-    query = select(Order).order_by(Order.created_at)
+    query = select(Order).order_by(Order.created_at.desc())
     
     if user_id:
         query = query.where(Order.user_id == user_id)

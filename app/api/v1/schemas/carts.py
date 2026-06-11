@@ -128,6 +128,7 @@ class CartResponse(BaseModel):
     subtotal: Optional[float] = 0
     discount_amount: Optional[float] = 0
     discounted_amount: Optional[float] = 0
+    total_discount_amount: Optional[float] = 0
     tax_percent: Optional[float] = 0.00
     tax_amount: Optional[float] = 0.00
     total_amount: Optional[float] = 0
@@ -136,6 +137,7 @@ class CartResponse(BaseModel):
     coupon_message: Optional[str] = None
     coupon_discount_amount: Optional[float] = 0
     combo_offers: Optional[List[CartComboOffer]] = None
+    bogo_offer_exists: Optional[bool] = False
     
     class Config:
         from_attributes = True

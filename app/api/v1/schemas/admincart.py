@@ -7,7 +7,7 @@ from app.models.carts import CartStatus
 
 class CartBase(BaseModel):
     user_id: UUID
-    coupon_id: int 
+    coupon_id: Optional[int] = None
     status: CartStatus
 
 class CartResponse(CartBase):

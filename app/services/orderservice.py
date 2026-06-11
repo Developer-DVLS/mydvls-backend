@@ -9,6 +9,7 @@ from app.api.v1.endpoints.cart import get_cart
 from app.api.v1.schemas.carts import CartResponse
 from app.api.v1.schemas.orders import OrderCreate
 from app.models.carts import CartProduct
+from app.models.offers import Offer
 from app.models.orders import Order, OrderItem
 from app.models.user import User, UserRole
 from app.services.cartservice import CartService
@@ -64,17 +65,59 @@ class OrderService:
             cart = await cart_service.cart_sync_on_login(request, response, self.db, user.id) 
             if not cart:
                 raise ValueError("Cart is Empty")
+            
+        ## recalculate totals
+        if cart.coupon_applied and cart.coupon_applicable:
+            coupon_result = await self.db.execute(
+                select(Offer)
+                .where(Offer.id == cart.coupon_id)
+            )
+            coupon = coupon_result.scalars().first()
+            
+            enriched_cart = await cart_service.enrich_cart(
+                request=request,
+                db=self.db,
+                user_id=user.id,
+                cart=cart,
+                coupon_code=coupon.coupon_code,
+                remove_coupon=False
+            )
+        else:
+            enriched_cart = await cart_service.enrich_cart(
+                request=request,
+                db=self.db,
+                user_id=user.id,
+                cart=cart,
+                coupon_code=None,
+                remove_coupon=True
+            )
+        
+        # if any bogo-offer exists: create a cart-product for free item
+        if enriched_cart.bogo_offer_exists:
+            for cart_product in enriched_cart.cart_products:
+                if cart_product.bogo_free_item:
+                    item = CartProduct(
+                        cart_id=cart.id,
+                        product_variant_id=cart_product.bogo_free_item.product_variant_id,
+                        quantity=cart_product.bogo_free_item.quantity,
+                        unit_price=0,
+                        is_free_item=True,
+                        trigger_cart_item_id=cart_product.id,
+                        parent_offer_id=cart_product.offer.id
+                    )
+                    self.db.add(item)
+            await self.db.refresh(item)
 
         # Create order
         order = Order(
             user_id = user.id,
             cart_id = cart.id,
             order_number = str(uuid.uuid4()),
-            subtotal = data.subtotal,
-            tax_amount = data.tax_amount,
-            discount_amount = data.discount_amount,
-            delivery_charge = data.delivery_charge,
-            total = data.total,
+            subtotal = enriched_cart.subtotal,
+            tax_amount = enriched_cart.tax_amount,
+            discount_amount = enriched_cart.total_discount_amount,
+            delivery_charge = 0, #TODO: need to calculate delivery charge
+            total = enriched_cart.total_amount,
             currency = data.currency or "USD",
             notes = data.notes,
             receiver_first_name = data.receiver_first_name, 
@@ -102,7 +145,7 @@ class OrderService:
             .where(CartProduct.cart_id == cart.id)
         )
         cart_items = items_result.scalars().all()
-        print("cart_items!!", cart_items)
+
         # Create order items
         for item in cart_items:
             order_item = OrderItem(

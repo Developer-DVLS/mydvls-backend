@@ -7,11 +7,11 @@ from pydantic import BaseModel
 from app.models.orders import DeliveryStatus, OrderStatus
 
 class OrderBase(BaseModel):
-    subtotal: float
-    tax_amount: float
-    discount_amount: float
-    delivery_charge: float
-    total: float
+    # subtotal: float
+    # tax_amount: float
+    # discount_amount: float
+    # delivery_charge: float
+    # total: float
     currency: Optional[str] = None
     notes: Optional[str] = None
     receiver_first_name: str
@@ -37,6 +37,11 @@ class OrderResponse(OrderBase):
     cart_id: Optional[int] = None
     order_number: str
     status: OrderStatus
+    subtotal: float
+    tax_amount: float
+    discount_amount: float
+    delivery_charge: float
+    total: float
     delivery_status: DeliveryStatus
     payment_intent_id: Optional[str] = None
     payment_status: Optional[str] = None
@@ -73,6 +78,11 @@ class OrderDetailResponse(OrderBase):
     cart_id: Optional[int] = None
     order_number: str
     status: OrderStatus
+    subtotal: float
+    tax_amount: float
+    discount_amount: float
+    delivery_charge: float
+    total: float
     delivery_status: DeliveryStatus
     payment_intent_id: Optional[str] = None
     payment_status: Optional[str] = None
