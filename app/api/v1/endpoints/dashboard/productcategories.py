@@ -92,13 +92,13 @@ async def create_category(
 
     if existing_category:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Category with this name already exists"
         )
 
     # create new category
     new_category = ProductCategory(
-        name=data.name,
+        name=data.name.lower(),
         description=data.description,
         image_url=data.image_url,
         is_active=data.is_active,

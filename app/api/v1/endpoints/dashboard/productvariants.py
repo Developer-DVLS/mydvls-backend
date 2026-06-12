@@ -132,7 +132,7 @@ async def create_variant(
     sku_exists = sku_exists_result.scalars().first()
     
     if sku_exists:
-        raise HTTPException(status_code=400, detail="Product variant with same SKU already exists")
+        raise HTTPException(status_code=409, detail="Product variant with same SKU already exists")
 
     new_variant = ProductVariant(
         product_id=data.product_id,

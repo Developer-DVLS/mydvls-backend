@@ -781,11 +781,14 @@ class CartService:
             # ALWAYS use DB price (source of truth)
             price = float(variant.price)
             # qty = cart_product.quantity
-            qty_after_combo = cart_product.quantity_after_combo
+            if cart.combo_offers:
+                qty_after_combo = cart_product.quantity_after_combo
+            else:
+                cart_product.quantity_after_combo = cart_product.quantity
+                qty_after_combo = cart_product.quantity_after_combo
 
             subtotal = price * qty_after_combo
 
-            # cart_product.quantity_after_combo = qty
             cart_product.subtotal = subtotal
             cart_product.discount_amount = 0
             cart_product.discounted_amount = subtotal
