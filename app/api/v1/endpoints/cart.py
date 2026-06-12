@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.schemas.carts import CartResponse, ComboOfferToCart
+from app.api.v1.schemas.carts import CartProductQtyUpdate, CartResponse, ComboOfferToCart
 from app.core.database import get_db
 from app.models.offers import ComboOffer
 from app.services.cartservice import CartService
@@ -77,8 +77,8 @@ async def add_to_cart(
 @cart_router.patch("/update-cart-product/{cart_product_id}/")
 async def update_cart_product(
     request: Request,
+    data: CartProductQtyUpdate,
     cart_product_id: int,
-    quantity: int = 1,
     db: AsyncSession = Depends(get_db),
     user = Depends(get_current_user_optional)
 ):
@@ -87,7 +87,7 @@ async def update_cart_product(
     await cart_service.update(
         request=request,
         db=db,  
-        quantity=quantity, 
+        quantity=data.quantity, 
         cart_product_id=cart_product_id, 
         user_id=user_id
     )

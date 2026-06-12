@@ -145,3 +145,6 @@ class CartResponse(BaseModel):
 class ComboOfferToCart(BaseModel):
     combo_offer_id: int
     quantity: int
+
+class CartProductQtyUpdate(BaseModel):
+    quantity: int
