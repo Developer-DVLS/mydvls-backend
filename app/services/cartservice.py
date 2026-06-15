@@ -256,6 +256,7 @@ class CartService:
 
         for item in items:
             if item["id"] == cart_product_id:
+                item["quantity_after_combo"] = quantity
                 item["quantity"] = quantity
 
         cart["cart_products"] = items
