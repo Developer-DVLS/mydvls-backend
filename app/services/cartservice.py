@@ -792,7 +792,7 @@ class CartService:
                 total_combo_discount += combo_offer['discount']
             
             cart.subtotal += total_bundle_price
-            cart.total_discount_amount += total_combo_discount
+            cart.total_discount_amount += float(total_combo_discount)
             cart.discounted_amount += total_final_price
             cart.total_amount += total_final_price  
             
