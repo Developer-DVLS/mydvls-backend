@@ -17,6 +17,7 @@ cart_service = CartService()
 @cart_router.get("/", response_model=CartResponse | dict )
 async def get_cart(
     request: Request,
+    response: Response,
     cart_count: Optional[bool] = False,
     coupon_code: Optional[str] = None,
     remove_coupon: Optional[bool] = True,
@@ -35,10 +36,14 @@ async def get_cart(
         db=db,
         user_id=user_id
     )
-    
+    cart = cart_service.normalize_cart(cart)
+
+    if not cart.cart_products:
+        return cart
     # calculate totals    
     enriched_cart = await cart_service.enrich_cart(
         request=request,
+        response=response,
         db=db,
         user_id=user_id,
         cart=cart,
@@ -46,8 +51,7 @@ async def get_cart(
         remove_coupon=remove_coupon
     )
 
-    return enriched_cart
-    
+    return enriched_cart    
 
 @cart_router.post("/add-to-cart/")
 async def add_to_cart(

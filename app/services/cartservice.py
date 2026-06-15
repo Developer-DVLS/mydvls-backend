@@ -118,8 +118,21 @@ class CartService:
                 "id": int(str(uuid.uuid4().int)[:4]),
                 "status": "active",
                 "user_id": None,
+                "coupon_id": None,
                 "cart_products": [], 
-                "subtotal": 0
+                "subtotal": 0,
+                "discount_amount":0,
+                "discounted_amount": 0,
+                "total_discount_amount": 0,
+                "tax_percent": 0.00,
+                "tax_amount": 0.00,
+                "total_amount": 0,
+                "coupon_applied": False,
+                "coupon_applicable": None,
+                "coupon_message": None,
+                "coupon_discount_amount": 0,
+                "combo_offers": None,
+                "bogo_offer_exists":False
                 }
 
         data = await get_cache(redis_cache_key)
@@ -129,10 +142,22 @@ class CartService:
                 "id": int(str(uuid.uuid4().int)[:4]),
                 "status": "active",
                 "user_id": None,
+                "coupon_id": None,
                 "cart_products": [], 
-                "subtotal": 0
+                "subtotal": 0,
+                "discount_amount":0,
+                "discounted_amount": 0,
+                "total_discount_amount": 0,
+                "tax_percent": 0.00,
+                "tax_amount": 0.00,
+                "total_amount": 0,
+                "coupon_applied": False,
+                "coupon_applicable": None,
+                "coupon_message": None,
+                "coupon_discount_amount": 0,
+                "combo_offers": None,
+                "bogo_offer_exists":False
                 }
-
         return data
     
     # add item to redis cache
@@ -178,6 +203,7 @@ class CartService:
                 "id": int(str(uuid.uuid4().int)[:4]),
                 "status": "active",
                 "user_id": None,
+                "coupon_id": None,
                 "cart_products": [],
                 "subtotal": 0
                 }
@@ -541,7 +567,7 @@ class CartService:
         redis_cart = await self.get_redis_cart(request)
 
         if not redis_cart.get("cart_products"):
-            return None
+            return
 
         cart = None
         for item in redis_cart["cart_products"]:
@@ -551,23 +577,96 @@ class CartService:
                 item["product_variant_id"],
                 item["quantity"]
             )
+            
+        if redis_cart['coupon_id']:            
+            cart.coupon_id = redis_cart['coupon_id']
+            await db.commit()
 
         # delete cart from redis cache
         await delete_cache(redis_cache_key)
         # delete cart cookie
         response.delete_cookie(key=self.SESSION_COOKIE_KEY)
         
-        return cart
+        await db.refresh(cart)
+        
+        result = await db.execute(
+            select(Cart)
+            .options(
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.product)
+                .selectinload(Product.category),
+
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.images),
+            )
+            .where(Cart.id == cart.id)
+        )
+        return result.scalars().first()
         
     # ======================================================
     # Calculate offers and totals
     # ======================================================
+    def normalize_cart(self, cart) -> CartResponse:
+        if isinstance(cart, CartResponse):
+            return cart
+
+        if isinstance(cart, dict):
+            return CartResponse.model_validate(cart)
+
+        # SQLAlchemy model
+        return CartResponse.model_validate(cart, from_attributes=True)
     
-    async def enrich_cart(self, request, db, user_id, cart, coupon_code, remove_coupon):
-        # normalize
-        # cart = CartResponse(**cart) if isinstance(cart, dict) else cart
-        if not isinstance(cart, CartResponse):
-            cart = CartResponse.model_validate(cart)
+    async def _persist_cart(self, request, response, cart: CartResponse):
+        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+
+        if not redis_cache_key:
+            redis_cache_key = f"{self.REDIS_PREFIX}{uuid.uuid4()}"
+
+            response.set_cookie(
+                key=self.SESSION_COOKIE_KEY,
+                value=redis_cache_key,
+                httponly=True,
+                max_age=self.GUEST_CART_EXPIRY,
+                secure=True,
+                samesite="none"
+            )
+
+        await set_cache(
+            redis_cache_key,
+            cart.model_dump(mode="json"),
+            expire=self.GUEST_CART_EXPIRY
+        )
+
+    
+    async def enrich_cart(self,
+        request: Request,
+        response: Response,
+        db: AsyncSession,
+        user_id: int | None,
+        cart,
+        coupon_code: str | None = None,
+        remove_coupon: bool = False
+        ):
+        # Normalize EVERYTHING first
+        cart = self.normalize_cart(cart)
+        
+        # Attach products (DB enrichment only once)
+        cart = await self._attach_products(request, db, cart)
+                
+        #calculate total
+        cart = self.calculate_cart_total(cart)
+
+        # coupon validation
+        if remove_coupon:
+            ## remove coupon from session/ db
+            cart = await self.remove_applied_coupon(request, db, user_id, cart)
+        else:
+            cart = await self.coupon_validation(
+                request, db, cart, coupon_code, user_id
+            )     
+        cart = self.normalize_cart(cart)
         
         # check for combo offer
         combo_offers = None
@@ -578,11 +677,7 @@ class CartService:
                 combo_offers=valid_combo_offers_result
             )
         cart.combo_offers = combo_offers
-        
-        # attach product-variant and product data 
-        #along with subtotal calculation, (discount amount and discounted_amount initialization)
-        cart = await self._attach_products(db, cart)
-        
+
         # check if offer (item, category, store) exists
         # first get all active offers
         offers = await get_all_active_offers(db)
@@ -595,7 +690,6 @@ class CartService:
                     continue
                 if cart_product.quantity_after_combo <= 0:
                     continue
-                                
                 product_variant = (
                     ProductVariantResponse(**cart_product.product_variant)
                     if isinstance(cart_product.product_variant, dict)
@@ -677,6 +771,7 @@ class CartService:
                                 id=get_item.product.id,
                                 name=get_item.product.name,
                                 description=get_item.product.description,
+                                category_id=get_item.product.category_id
                             )
                         )
                         
@@ -685,7 +780,8 @@ class CartService:
         
         # recalculate total cart totals
         cart = self.calculate_cart_total(cart)
-        
+
+        # Apply combo offer
         if combo_offers:
             total_bundle_price = 0
             total_final_price = 0
@@ -698,19 +794,8 @@ class CartService:
             cart.subtotal += total_bundle_price
             cart.total_discount_amount += total_combo_discount
             cart.discounted_amount += total_final_price
-            cart.total_amount += total_final_price            
-
-        # coupon validation
-        if remove_coupon:
-            cart.coupon_applied = False
-            cart.coupon_applicable = False
-            cart.coupon_message = "No coupon applied."
+            cart.total_amount += total_final_price  
             
-            ## remove coupon from session/ db
-            await self.remove_applied_coupon(request, db, user_id)
-        else:
-            cart = await self.coupon_validation(request, db, cart, coupon_code, user_id)
-
         #tax calculation
         tax_percent = await self.tax_calculation(db)
         if tax_percent:
@@ -720,6 +805,8 @@ class CartService:
             #total after adding tax 
             cart.total_amount = cart.total_amount + tax_amount
         
+        # Persist (REDIS ONLY ONCE)
+        await self._persist_cart(request, response, cart)
         return cart
     
     def calculate_cart_total(self, cart):
@@ -738,7 +825,7 @@ class CartService:
         cart.subtotal = subtotal
         cart.discount_amount = discount_amount
         cart.discounted_amount = discounted_amount
-        cart.total_discount_amount = discount_amount
+        # cart.total_discount_amount = discount_amount
         cart.tax_percent = tax_percent
         cart.tax_amount = tax_amount
         
@@ -746,15 +833,15 @@ class CartService:
         total_amount = subtotal - discount_amount
         
         cart.total_amount = total_amount
-        
         return cart
         
-    async def _attach_products(self, db, cart):
+    async def _attach_products(self, request, db, cart: CartResponse):
         variant_ids = [i.product_variant_id for i in cart.cart_products]
 
         result = await db.execute(
             select(ProductVariant)
             .options(
+                selectinload(ProductVariant.product),
                 selectinload(ProductVariant.product).selectinload(Product.category),
                 selectinload(ProductVariant.images),
             )
@@ -796,6 +883,14 @@ class CartService:
             valid_cart_products.append(cart_product)
             
         cart.cart_products = valid_cart_products
+        
+        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+        if not redis_cache_key:
+            return
+        
+        await set_cache(redis_cache_key, 
+                            cart.model_dump(mode="json"),
+                            expire=self.GUEST_CART_EXPIRY)
         return cart
     
     async def _attach_offer(
@@ -807,7 +902,7 @@ class CartService:
         category_map,
         store_offer,
         bogo_map
-    ):        
+    ):      
         best_offer = resolve_offer(
             product_variant,
             item_map,
@@ -866,16 +961,14 @@ class CartService:
 
             )
             coupon_offer = result.scalars().first()
-            
+
             if not coupon_offer:
+                cart.coupon_id = None
                 cart.coupon_applied = False
                 cart.coupon_applicable = False
                 cart.coupon_message = "Invalid coupon code."
 
                 return cart
-            
-            ## add coupon in session/ db
-            await self.add_applied_coupon(request, db, user_id, coupon_offer)
         else:
             #get coupon id from session/ db
             coupon_id = await self.get_applied_coupon(request, db, user_id)
@@ -924,7 +1017,8 @@ class CartService:
         cart.total_discount_amount += coupon_discount_amount
         
         cart.total_amount = cart.total_amount - coupon_discount_amount
-            
+        ## add coupon in session/ db
+        cart = await self.add_applied_coupon(request, db, user_id, coupon_offer, cart)
         return cart
     
     # ======================================================
@@ -937,6 +1031,15 @@ class CartService:
         if user_id:
             result = await db.execute(
                 select(Cart)
+                .options(
+                    selectinload(Cart.cart_products)
+                    .selectinload(CartProduct.product_variant)
+                    .selectinload(ProductVariant.product)
+                    .selectinload(Product.category),
+                    selectinload(Cart.cart_products)
+                    .selectinload(CartProduct.product_variant)
+                    .selectinload(ProductVariant.images),
+                )
                 .where(
                     Cart.user_id == user_id,
                     Cart.status == CartStatus.ACTIVE
@@ -945,7 +1048,7 @@ class CartService:
             user_cart = result.scalars().first()
             
             if not user_cart:
-                return None 
+                return
             
             return user_cart.coupon_id
         else:
@@ -953,16 +1056,26 @@ class CartService:
             # get redis cache key from cookie
             redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
             if not redis_cache_key:
-                return None
+                return
             cart = await get_cache(redis_cache_key)
             if 'coupon_id' in cart and cart.get('coupon_id'):
                 return cart['coupon_id']
+            return 0
     
-    async def add_applied_coupon(self, request, db, user_id, coupon):
+    async def add_applied_coupon(self, request, db, user_id, coupon, cart):
         # if user is logged in add coupon to cart
         if user_id:
             result = await db.execute(
                 select(Cart)
+                .options(
+                    selectinload(Cart.cart_products)
+                    .selectinload(CartProduct.product_variant)
+                    .selectinload(ProductVariant.product)
+                    .selectinload(Product.category),
+                    selectinload(Cart.cart_products)
+                    .selectinload(CartProduct.product_variant)
+                    .selectinload(ProductVariant.images),
+                )
                 .where(
                     Cart.user_id == user_id,
                     Cart.status == CartStatus.ACTIVE
@@ -971,26 +1084,45 @@ class CartService:
             user_cart = result.scalars().first()
             
             if not user_cart:
-                return None 
+                return
             
             user_cart.coupon_id = coupon.id
             await db.commit()
-            await db.refresh(user_cart)            
+            cart.coupon_id = coupon.id
+            cart.coupon_applied = True
+            cart.coupon_applicable = True
+            cart.coupon_message = "Coupon applied"
+            
+            redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+            if not redis_cache_key:
+                return
+            
+            return cart
         else:
             # add coupon_id in session
             # get redis cache key from cookie
             redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
             if not redis_cache_key:
-                return None
-            cart = await get_cache(redis_cache_key)
-            cart["coupon_id"] = coupon.id
-            
-            await set_cache(redis_cache_key, cart, expire=self.GUEST_CART_EXPIRY)
+                return
+            cart.coupon_id = coupon.id
+            await set_cache(redis_cache_key, 
+                            cart.model_dump(mode="json"),
+                            expire=self.GUEST_CART_EXPIRY)
+            return cart
     
-    async def remove_applied_coupon(self, request, db, user_id):
+    async def remove_applied_coupon(self, request, db, user_id, cart):
         if user_id:
             result = await db.execute(
                 select(Cart)
+                .options(
+                    selectinload(Cart.cart_products)
+                    .selectinload(CartProduct.product_variant)
+                    .selectinload(ProductVariant.product)
+                    .selectinload(Product.category),
+                    selectinload(Cart.cart_products)
+                    .selectinload(CartProduct.product_variant)
+                    .selectinload(ProductVariant.images),
+                )
                 .where(
                     Cart.user_id == user_id,
                     Cart.status == CartStatus.ACTIVE
@@ -999,23 +1131,38 @@ class CartService:
             user_cart = result.scalars().first()
             
             if not user_cart:
-                return None 
+                return
             
             user_cart.coupon_id = None
             await db.commit()
-            await db.refresh(user_cart)
+
+            cart.coupon_id = None
+            cart.coupon_applied = False
+            cart.coupon_applicable = False
+            cart.coupon_message = "No coupon applied."
+            cart.coupon_discount_amount = 0
+
+            return cart
         else:
             # add coupon_id in session
             # get redis cache key from cookie
             redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
             if not redis_cache_key:
-                return None
-            cart = await get_cache(redis_cache_key)
-            if not cart:
-                return None
-            cart["coupon_id"] =  None
+                return
+            # cart = await get_cache(redis_cache_key)
+            # if not cart:
+            #     return
+            cart.coupon_id = None
+            cart.coupon_applied = False
+            cart.coupon_applicable = False
+            cart.coupon_message = "No coupon applied."
+                        
+            await set_cache(redis_cache_key, 
+                            cart.model_dump(mode="json"),
+                            expire=self.GUEST_CART_EXPIRY)
             
-            await set_cache(redis_cache_key, cart, expire=self.GUEST_CART_EXPIRY)
+            cart = await get_cache(redis_cache_key)
+            return cart
     
     # ======================================================
     # BOGO OFFER

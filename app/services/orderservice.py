@@ -43,10 +43,10 @@ class OrderService:
             self.db, 
             user.id if user else None
             )
-        # normalize
-        if not isinstance(cart, CartResponse):
-            cart = CartResponse.model_validate(cart)
         
+        # normalize
+        cart = cart_service.normalize_cart(cart)
+            
         if not cart.cart_products:
             raise ValueError("Cart is Empty")
         
@@ -66,32 +66,35 @@ class OrderService:
             if not cart:
                 raise ValueError("Cart is Empty")
             
-        ## recalculate totals
-        if cart.coupon_applied and cart.coupon_applicable:
+            # # normalize
+            # cart = cart_service.normalize_cart(cart)
+                        
+        if cart.coupon_id:
             coupon_result = await self.db.execute(
                 select(Offer)
                 .where(Offer.id == cart.coupon_id)
             )
             coupon = coupon_result.scalars().first()
-            
             enriched_cart = await cart_service.enrich_cart(
-                request=request,
-                db=self.db,
-                user_id=user.id,
-                cart=cart,
-                coupon_code=coupon.coupon_code,
-                remove_coupon=False
-            )
+                    request=request,
+                    response=response,
+                    db=self.db,
+                    user_id=user.id,
+                    cart=cart,
+                    coupon_code=coupon.code,
+                    remove_coupon=False
+                )
         else:
             enriched_cart = await cart_service.enrich_cart(
-                request=request,
-                db=self.db,
-                user_id=user.id,
-                cart=cart,
-                coupon_code=None,
-                remove_coupon=True
-            )
-        
+                    request=request,
+                    response=response,
+                    db=self.db,
+                    user_id=user.id,
+                    cart=cart,
+                    coupon_code=None,
+                    remove_coupon=True
+                )
+
         # if any bogo-offer exists: create a cart-product for free item
         if enriched_cart.bogo_offer_exists:
             for cart_product in enriched_cart.cart_products:
@@ -106,7 +109,7 @@ class OrderService:
                         parent_offer_id=cart_product.offer.id
                     )
                     self.db.add(item)
-            await self.db.refresh(item)
+            # await self.db.refresh(item)
 
         # Create order
         order = Order(

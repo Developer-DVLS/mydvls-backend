@@ -10,6 +10,7 @@ class ProductResponse(BaseModel):
     id: int
     name: str
     description: str
+    category_id: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -37,6 +38,7 @@ class CartGetItemProduct(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    category_id: int
     
     class Config:
         from_attributes = True
@@ -59,6 +61,9 @@ class CartBOGOMeta(BaseModel):
     get_quantity: int
     apply_to_same_item: bool = True
     get_item: Optional[CartGetItem] = None
+    
+    class Config:
+        from_attributes = True
 
 class CartOfferResponse(BaseModel):
     id: int
@@ -77,6 +82,9 @@ class CartBOGOFreeItem(BaseModel):
     quantity: int
     unit_price: Optional[float] = 0
     # product_variant: Optional[ProductVariantResponse] = None
+    
+    class Config:
+        from_attributes = True
     
 class CartProductResponse(BaseModel):
     id: int

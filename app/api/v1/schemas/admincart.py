@@ -42,3 +42,10 @@ class CartDetailResponse(CartBase):
     
     class Config:
         from_attributes = True
+
+class CartProductUpdate(BaseModel):
+    product_variant_id: int
+    quantity: int
+    is_free_item: bool
+    trigger_cart_item_id: int
+    parent_offer_id: int

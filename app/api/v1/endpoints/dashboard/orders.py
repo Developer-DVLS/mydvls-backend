@@ -163,3 +163,30 @@ async def update_order_status(
         "order_id": order.id,
         "status": order.status,
     }
+    
+@admin_order_router.delete("/{order_id:int}/")
+async def get_order(
+    order_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(staff_only)
+):
+    result = await db.execute(
+        select(Order)
+        .options(
+            selectinload(Order.items)
+        )
+        .where(Order.id == order_id)
+    )
+    order = result.scalars().first()
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail='Order not found.'
+        )
+    await db.delete(order)
+    await db.commit()
+    
+    return {
+        "status": True,
+        "message": "Order deleted successfully"
+    }

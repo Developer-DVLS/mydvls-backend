@@ -6,8 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.admincart import PaginatedCartResponse
-from app.models.carts import Cart, CartStatus
+from app.api.v1.schemas.admincart import CartDetailResponse, CartProductResponse, CartProductUpdate, PaginatedCartResponse
+from app.models.carts import Cart, CartProduct, CartStatus
 from app.models.user import User
 from app.utils.pagination import get_paginated_result
 from app.auth.permissions import staff_only
@@ -35,3 +35,102 @@ async def list_carts(
         query = query.where(func.date(Cart.created_at) == created_at.date())
     
     return await get_paginated_result(db, query, skip, limit)
+
+@admin_cart_router.get("/{cart_id:int}/", response_model=CartDetailResponse)
+async def get_cart(
+    cart_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(staff_only)
+):
+    result = await db.execute(
+        select(Cart)
+        .options(
+            selectinload(Cart.cart_products)
+        )
+        .where(Cart.id == cart_id)
+    )
+    cart = result.scalars().first()
+    if not cart:
+        raise HTTPException(
+            status_code=404,
+            detail="Cart not found."
+        )
+    
+    return cart
+
+@admin_cart_router.delete("/{cart_id:int}/")
+async def delete_cart(
+    cart_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(staff_only)
+):
+    result = await db.execute(
+        select(Cart)
+        .options(
+            selectinload(Cart.cart_products)
+        )
+        .where(Cart.id == cart_id)
+    )
+    cart = result.scalars().first()
+    if not cart:
+        raise HTTPException(
+            status_code=404,
+            detail="Cart not found."
+        )
+    
+    await db.delete(cart)
+    await db.commit()
+
+    return {
+        "status": True,
+        "message": "Cart deleted successfully"
+    }
+
+@admin_cart_router.patch("/cart-product/{cart_product_id:int}/", response_model=CartProductResponse)
+async def update_cart_product(
+    cart_product_id: int,
+    data: CartProductUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(staff_only)
+):
+    result = await db.execute(
+        select(CartProduct)
+        .where(CartProduct.id == cart_product_id)
+    )
+    cart_product = result.scalars().first()
+    if not cart_product:
+        raise HTTPException(
+            status_code=404,
+            detail="Cart product not found."
+        )
+    
+    # apply only provided fields
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(cart_product, field, value)
+
+    return cart_product
+
+@admin_cart_router.delete("/cart-product/{cart_product_id:int}/")
+async def delete_cart_product(
+    cart_product_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(staff_only)
+):
+    result = await db.execute(
+        select(CartProduct)
+        .where(CartProduct.id == cart_product_id)
+    )
+    cart_product = result.scalars().first()
+    if not cart_product:
+        raise HTTPException(
+            status_code=404,
+            detail="Cart product not found."
+        )
+    
+    await db.delete(cart_product)
+    await db.commit()
+
+    return {
+        "status": True,
+        "message": "Cart product deleted successfully"
+    }

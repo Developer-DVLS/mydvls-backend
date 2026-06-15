@@ -39,5 +39,4 @@ class UserService:
             await self.db.commit()
             await self.db.refresh(guest_user)
             
-        print("guest_user!!!!", guest_user.id)
         return guest_user
