@@ -888,13 +888,13 @@ class CartService:
             
         cart.cart_products = valid_cart_products
         
-        # redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
-        # if not redis_cache_key:
-        #     return
+        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+        if not redis_cache_key:
+            return
         
-        # await set_cache(redis_cache_key, 
-        #                     cart.model_dump(mode="json"),
-        #                     expire=self.GUEST_CART_EXPIRY)
+        await set_cache(redis_cache_key, 
+                            cart.model_dump(mode="json"),
+                            expire=self.GUEST_CART_EXPIRY)
         return cart
     
     async def _attach_offer(
