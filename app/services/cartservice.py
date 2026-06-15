@@ -254,15 +254,24 @@ class CartService:
         cart = await self.get_redis_cart(request)
         items = cart.get("cart_products", [])
 
+        updated = False
+
         for item in items:
-            if item["id"] == cart_product_id:
+            if int(item.get("id")) == int(cart_product_id):
                 item["quantity_after_combo"] = quantity
                 item["quantity"] = quantity
+                updated = True
+                break
+            
+        if not updated:
+            return {"detail": "Cart item not found"}
+
 
         cart["cart_products"] = items
         
         await set_cache(redis_cache_key, cart, self.GUEST_CART_EXPIRY)
 
+        
         return cart
     
     # remove cache cart item
@@ -656,10 +665,12 @@ class CartService:
         ):
         # Normalize EVERYTHING first
         cart = self.normalize_cart(cart)
+        if not cart.cart_products:
+            return cart
         
         # Attach products (DB enrichment only once)
-        cart = await self._attach_products(request, db, cart)
-        
+        cart = await self._attach_products(request, db, user_id, cart)
+
         #calculate total
         cart = self.calculate_cart_total(cart)
         
@@ -840,7 +851,7 @@ class CartService:
         cart.total_amount = total_amount
         return cart
         
-    async def _attach_products(self, request, db, cart: CartResponse):
+    async def _attach_products(self, request, db, user_id, cart: CartResponse):
         variant_ids = [i.product_variant_id for i in cart.cart_products]
 
         result = await db.execute(
@@ -889,13 +900,14 @@ class CartService:
             
         cart.cart_products = valid_cart_products
         
-        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
-        if not redis_cache_key:
-            return
-        
-        await set_cache(redis_cache_key, 
-                            cart.model_dump(mode="json"),
-                            expire=self.GUEST_CART_EXPIRY)
+        if not user_id:
+            redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+            if not redis_cache_key:
+                return
+            
+            await set_cache(redis_cache_key, 
+                                cart.model_dump(mode="json"),
+                                expire=self.GUEST_CART_EXPIRY)
         return cart
     
     async def _attach_offer(

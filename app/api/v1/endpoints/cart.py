@@ -36,10 +36,7 @@ async def get_cart(
         db=db,
         user_id=user_id
     )
-    cart = cart_service.normalize_cart(cart)
 
-    if not cart.cart_products:
-        return cart
     # calculate totals    
     enriched_cart = await cart_service.enrich_cart(
         request=request,
