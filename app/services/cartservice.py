@@ -272,14 +272,18 @@ class CartService:
     ):
         # get redis cache key from cookie
         redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
-        
-        cart = await get_cache(redis_cache_key)
-        items = cart.get("cart_products", {})
 
-        # remove matching cart product
-        items = [
+        cart = await get_cache(redis_cache_key)
+
+        if not cart:
+            return {"cart_products": []}
+
+        items = cart.get("cart_products", [])
+
+        # ensure correct type comparison
+        cart["cart_products"] = [
             item for item in items
-            if item["id"] != cart_product_id
+            if int(item["id"]) != int(cart_product_id)
         ]
 
         await set_cache(redis_cache_key, cart, self.GUEST_CART_EXPIRY)
@@ -654,10 +658,10 @@ class CartService:
         
         # Attach products (DB enrichment only once)
         cart = await self._attach_products(request, db, cart)
-                
+        
         #calculate total
         cart = self.calculate_cart_total(cart)
-
+        
         # coupon validation
         if remove_coupon:
             ## remove coupon from session/ db
@@ -794,8 +798,8 @@ class CartService:
             cart.subtotal += total_bundle_price
             cart.total_discount_amount += float(total_combo_discount)
             cart.discounted_amount += total_final_price
-            cart.total_amount += total_final_price  
-            
+            cart.total_amount += total_final_price
+              
         #tax calculation
         tax_percent = await self.tax_calculation(db)
         if tax_percent:
@@ -806,7 +810,7 @@ class CartService:
             cart.total_amount = cart.total_amount + tax_amount
         
         # Persist (REDIS ONLY ONCE)
-        await self._persist_cart(request, response, cart)
+        # await self._persist_cart(request, response, cart)
         return cart
     
     def calculate_cart_total(self, cart):
@@ -865,9 +869,9 @@ class CartService:
                 else None
             )
             
-            # ALWAYS use DB price (source of truth)
-            price = float(variant.price)
-            # qty = cart_product.quantity
+            # # ALWAYS use DB price (source of truth)
+            price = float(cart_product.product_variant.price)
+            # # qty = cart_product.quantity
             if cart.combo_offers:
                 qty_after_combo = cart_product.quantity_after_combo
             else:
@@ -884,13 +888,13 @@ class CartService:
             
         cart.cart_products = valid_cart_products
         
-        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
-        if not redis_cache_key:
-            return
+        # redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+        # if not redis_cache_key:
+        #     return
         
-        await set_cache(redis_cache_key, 
-                            cart.model_dump(mode="json"),
-                            expire=self.GUEST_CART_EXPIRY)
+        # await set_cache(redis_cache_key, 
+        #                     cart.model_dump(mode="json"),
+        #                     expire=self.GUEST_CART_EXPIRY)
         return cart
     
     async def _attach_offer(
@@ -1093,10 +1097,6 @@ class CartService:
             cart.coupon_applicable = True
             cart.coupon_message = "Coupon applied"
             
-            redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
-            if not redis_cache_key:
-                return
-            
             return cart
         else:
             # add coupon_id in session
@@ -1104,10 +1104,18 @@ class CartService:
             redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
             if not redis_cache_key:
                 return
-            cart.coupon_id = coupon.id
-            await set_cache(redis_cache_key, 
-                            cart.model_dump(mode="json"),
-                            expire=self.GUEST_CART_EXPIRY)
+            cached_cart = await get_cache(redis_cache_key)
+
+            if not cached_cart:
+                return None
+
+            cached_cart["coupon_id"] = coupon.id
+
+            await set_cache(
+                redis_cache_key,
+                cached_cart,
+                expire=self.GUEST_CART_EXPIRY
+            )
             return cart
     
     async def remove_applied_coupon(self, request, db, user_id, cart):
