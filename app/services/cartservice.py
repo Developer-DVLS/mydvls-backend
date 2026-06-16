@@ -318,9 +318,9 @@ class CartService:
                 
                 # decrement visible quantity
                 item["quantity"] -= current_visible
-                item["quantity_after_combo"] -= current_visible
+                item["quantity_after_combo"] = 0
                 
-                if current_visible <= 0:
+                if item["quantity"] <= 0:
                     # remove item completely
                     items.remove(item)
                 
