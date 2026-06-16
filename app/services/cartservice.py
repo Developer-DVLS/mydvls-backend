@@ -360,8 +360,8 @@ class CartService:
 
         for item in items:
             if item["product_variant_id"] == product_variant_id:
-                item["quantity"] -= item["quantity_after_combo"]
-                item["quantity_after_combo"] = 0
+                item["quantity"] -= quantity
+                item["quantity_after_combo"] -= quantity
 
                 if item["quantity"] <= 0:
                     items.remove(item)
