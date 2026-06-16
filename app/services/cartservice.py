@@ -255,14 +255,22 @@ class CartService:
         items = cart.get("cart_products", [])
 
         updated = False
-
+        
         for item in items:
             if int(item.get("id")) == int(cart_product_id):
-                if item["quantity"] == quantity:
+                if quantity > item["quantity"]:
+                    quantity_change = quantity - item["quantity_after_combo"]
+                    item["quantity"] += quantity_change
+                    item["quantity_after_combo"] += quantity_change
+                    
+                if quantity < item["quantity"]:
+                    quantity_change = item["quantity_after_combo"] - quantity
+                    print("quantity_change", quantity_change)
+                    item["quantity"] -= quantity_change
+                    item["quantity_after_combo"] -= quantity_change
+                
+                if quantity ==  item["quantity"]:
                     item["quantity"] += 1
-                    item["quantity_after_combo"] = quantity
-                else:
-                    item["quantity"] = quantity
                     item["quantity_after_combo"] = quantity
 
                 updated = True
@@ -294,11 +302,29 @@ class CartService:
 
         items = cart.get("cart_products", [])
 
-        # ensure correct type comparison
-        cart["cart_products"] = [
-            item for item in items
-            if int(item["id"]) != int(cart_product_id)
-        ]
+        # # ensure correct type comparison
+        # cart["cart_products"] = [
+        #     item for item in items
+        #     if int(item["id"]) != int(cart_product_id)
+        # ]
+        for item in items:
+            if int(item["id"]) == int(cart_product_id):
+                current_visible = item.get(
+                    "quantity_after_combo",
+                    item["quantity"]
+                )
+                
+                # decrement visible quantity
+                item["quantity"] -= current_visible
+                item["quantity_after_combo"] -= current_visible
+                
+                if current_visible <= 0:
+                    # remove item completely
+                    items.remove(item)
+                
+                break
+                
+        cart["cart_products"] = items     
 
         await set_cache(redis_cache_key, cart, self.GUEST_CART_EXPIRY)
 
@@ -507,6 +533,8 @@ class CartService:
 
         if not cart_product:
             raise HTTPException(status_code=404, detail="CartProduct not found")
+        
+        
 
         await db.delete(cart_product)
         await db.commit()
