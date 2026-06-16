@@ -58,7 +58,7 @@ class CartService:
         user_id=None
     ):
         if user_id:
-            return await self.update_db_cart_item(db, user_id, cart_product_id, quantity)
+            return await self.update_db_cart_item(request, db, user_id, cart_product_id, quantity)
 
         return await self.update_redis_cart(request, cart_product_id, quantity)
     
@@ -484,8 +484,15 @@ class CartService:
         return result.scalars().first()
 
     
-    async def update_db_cart_item(self, db: AsyncSession, user_id, cart_product_id, quantity):
+    async def update_db_cart_item(self, request, db: AsyncSession, user_id, cart_product_id, quantity):
         cart = await self.get_or_create_db_cart(db, user_id)
+        
+        ## get calculated cart from cache
+        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+        if not redis_cache_key:
+            return
+        cache_cart = await get_cache(redis_cache_key)
+        cache_cart_items = cache_cart.get("cart_products", [])
         
         # check if cartproduct id is valid
         result = await db.execute(
@@ -495,7 +502,6 @@ class CartService:
 
         if not cart_product:
             raise HTTPException(status_code=404, detail="CartProduct not found")
-        
 
         result = await db.execute(
             select(CartProduct)
@@ -505,10 +511,26 @@ class CartService:
                 )
             )
         item = result.scalars().first()
+        
+        for cache_cart_item in cache_cart_items:
+            if int(cache_cart_item.get("id")) == int(item.id):
+                if quantity > item.quantity:
+                    quantity_change = quantity - cache_cart_item["quantity_after_combo"]
+                    item.quantity += quantity_change
+                    cache_cart_item["quantity_after_combo"] = quantity
+                    
+                if quantity < item.quantity:
+                    quantity_change = cache_cart_item["quantity_after_combo"] - quantity
+                    item.quantity -= quantity_change
+                    cache_cart_item["quantity_after_combo"] = quantity
 
-        if item:
-            item.quantity = quantity
-            await db.commit()
+                if quantity ==  item.quantity:
+                    quantity_change = quantity - cache_cart_item["quantity_after_combo"]
+                    item.quantity += quantity_change
+                    cache_cart_item["quantity_after_combo"] = quantity
+                    
+            
+        await db.commit()
             
         result = await db.execute(
         select(Cart)
