@@ -258,10 +258,14 @@ class CartService:
 
         for item in items:
             if int(item.get("id")) == int(cart_product_id):
-                item["quantity_after_combo"] = quantity
-                item["quantity"] = quantity
+                if item["quantity"] == quantity:
+                    item["quantity"] += 1
+                    item["quantity_after_combo"] = quantity
+                else:
+                    item["quantity"] = quantity
+                    item["quantity_after_combo"] = quantity
+
                 updated = True
-                break
             
         if not updated:
             return {"detail": "Cart item not found"}

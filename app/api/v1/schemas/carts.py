@@ -6,11 +6,15 @@ from pydantic import BaseModel
 from app.models.carts import CartStatus
 from app.models.offers import DiscountType, OfferType
 
+class ProductCategoryResponse(BaseModel):
+    id: int
+    name: str
 class ProductResponse(BaseModel):
     id: int
     name: str
     description: str
     category_id: Optional[int] = None
+    category: Optional[ProductCategoryResponse] = None
     
     class Config:
         from_attributes = True
