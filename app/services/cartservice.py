@@ -261,19 +261,22 @@ class CartService:
                 if quantity > item["quantity"]:
                     quantity_change = quantity - item["quantity_after_combo"]
                     item["quantity"] += quantity_change
-                    item["quantity_after_combo"] += quantity_change
+                    item["quantity_after_combo"] = quantity
                     
                 if quantity < item["quantity"]:
                     quantity_change = item["quantity_after_combo"] - quantity
-                    print("quantity_change", quantity_change)
                     item["quantity"] -= quantity_change
-                    item["quantity_after_combo"] -= quantity_change
-                
+                    item["quantity_after_combo"] = quantity
+
                 if quantity ==  item["quantity"]:
-                    item["quantity"] += 1
+                    quantity_change = quantity - item["quantity_after_combo"]
+                    item["quantity"] += quantity_change
                     item["quantity_after_combo"] = quantity
 
                 updated = True
+                
+                if item["quantity"] == 0 or item["quantity_after_combo"] < 0:
+                    items.remove(item)
             
         if not updated:
             return {"detail": "Cart item not found"}
@@ -282,7 +285,6 @@ class CartService:
         cart["cart_products"] = items
         
         await set_cache(redis_cache_key, cart, self.GUEST_CART_EXPIRY)
-
         
         return cart
     
@@ -854,7 +856,7 @@ class CartService:
             cart.total_amount = cart.total_amount + tax_amount
         
         # Persist (REDIS ONLY ONCE)
-        # await self._persist_cart(request, response, cart)
+        await self._persist_cart(request, response, cart)
         return cart
     
     def calculate_cart_total(self, cart):

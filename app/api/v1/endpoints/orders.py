@@ -1,5 +1,6 @@
 import json
 from typing import Optional
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 import httpx
 from sqlalchemy import select, or_
@@ -87,7 +88,7 @@ async def create_order(
 
 @order_router.get("/order/{order_number}/", response_model=OrderDetailResponse)
 async def get_order_by_order_number(
-    order_number: int,
+    order_number: UUID,
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
