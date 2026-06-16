@@ -97,7 +97,7 @@ class CartService:
         user_id=None
     ):
         if user_id:
-            return await self.remove_combo_from_cart(db, user_id, product_variation_id, quantity)
+            return await self.remove_combo_from_cart(request, db, user_id, product_variation_id, quantity)
 
         return await self.remove_redis_combo_item(request, product_variation_id, quantity)
     
@@ -360,7 +360,9 @@ class CartService:
 
         for item in items:
             if item["product_variant_id"] == product_variant_id:
-                item["quantity"] = item["quantity"] - quantity
+                item["quantity"] -= item["quantity_after_combo"]
+                item["quantity_after_combo"] = 0
+
                 if item["quantity"] <= 0:
                     items.remove(item)
 
@@ -575,8 +577,15 @@ class CartService:
         await db.commit()
     
     # remove_combo_from_cart
-    async def remove_combo_from_cart(self, db: AsyncSession, user_id, product_variant_id, quantity):
+    async def remove_combo_from_cart(self, request, db: AsyncSession, user_id, product_variant_id, quantity):
         cart = await self.get_or_create_db_cart(db, user_id)
+        
+        ## get calculated cart from cache
+        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+        if not redis_cache_key:
+            return
+        cache_cart = await get_cache(redis_cache_key)
+        cache_cart_items = cache_cart.get("cart_products", [])
 
         result = await db.execute(
             select(CartProduct)
@@ -588,10 +597,15 @@ class CartService:
         item = result.scalars().first()
 
         if item:
-            item.quantity = item.quantity - quantity
-            if item.quantity <= 0:
-                await db.delete(item)
-            await db.commit()
+            for cache_cart_item in cache_cart_items:
+                if int(cache_cart_item.get("id")) == int(item.id):
+                    item.quantity -= item["quantity_after_combo"]
+                    item["quantity_after_combo"] = 0
+
+                    if item.quantity <= 0:
+                        await db.delete(item)
+        
+        await db.commit()
             
         result = await db.execute(
         select(Cart)
