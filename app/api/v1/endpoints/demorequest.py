@@ -24,14 +24,14 @@ async def create_demo_request(
         full_name = f"{data.first_name} {data.last_name}".strip(),
         email = data.email.lower(),
         phone = data.phone,
-        business_name = data.business_name.lower() or None,
-        business_size = data.business_size or None,
+        business_name = data.business_name.lower() or None if "business_name" in data else None,
+        business_size = data.business_size or None if "business_size" in data else None,
         business_type = data.business_type.lower() or None,
         branch_count = data.branch_count,
         opening_type = data.opening_type.lower(), 
-        preferred_date = data.preferred_date or None,
-        timezone = data.timezone or None,
-        message = data.message or None
+        preferred_date = data.preferred_date or None if "preferred_date" in data else None,
+        timezone = data.timezone or None if "preferred_date" in data else None,
+        message = data.message or None if "message" in data else None
     )
     db.add(demo_request)
     await db.commit()
