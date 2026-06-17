@@ -22,13 +22,13 @@ async def create_demo_request(
     demo_request = DemoRequest(
         user_id = current_user.id if current_user else None,
         full_name = f"{data.first_name} {data.last_name}".strip(),
-        email = data.email,
+        email = data.email.lower(),
         phone = data.phone,
-        business_name = data.business_name or None,
+        business_name = data.business_name.lower() or None,
         business_size = data.business_size or None,
-        business_type = data.business_type or None,
+        business_type = data.business_type.lower() or None,
         branch_count = data.branch_count,
-        opening_type = data.opening_type, 
+        opening_type = data.opening_type.lower(), 
         preferred_date = data.preferred_date or None,
         timezone = data.timezone or None,
         message = data.message or None
