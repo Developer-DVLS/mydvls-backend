@@ -16,6 +16,7 @@ from app.models.carts import (Cart, CartProduct)
 from app.models.delivery import DeliveryConfig
 from app.models.tax import TaxConfig
 from app.models.orders import (Order, OrderItem)
+from app.models.demorequest import DemoRequest
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
