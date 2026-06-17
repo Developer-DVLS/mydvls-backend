@@ -22,14 +22,14 @@ async def list_demo_request(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only)
 ):
-    query = select(DemoRequest)
+    query = select(DemoRequest).order_by(
+                DemoRequest.created_at.desc()
+                )  #later have to change ordering based on scheduled time
     
     if status:
         query = query.where(
             DemoRequest.status == DemoRequestStatus
-            ).order_by(
-                DemoRequest.created_at.desc()
-                )  #later have to change ordering based on scheduled time
+            )
     
     if search:
         query = query.where(

@@ -17,6 +17,7 @@ from app.models.delivery import DeliveryConfig
 from app.models.tax import TaxConfig
 from app.models.orders import (Order, OrderItem)
 from app.models.demorequest import DemoRequest
+from app.models.subscriptionplan import SubscriptionPlan
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

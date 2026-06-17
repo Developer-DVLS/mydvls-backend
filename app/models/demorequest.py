@@ -38,7 +38,7 @@ class DemoRequest(Base):
     business_name = Column(String(255), nullable=True)
     business_size = Column(String(100), nullable=True)
     business_type = Column(Text, nullable=True)
-    branch_count = Column(Integer, nullable=False, default=1)
+    branch_count = Column(String, nullable=False)
     
     # Is it existing business or new business in our system
     opening_type = Column(String(255), nullable=False)

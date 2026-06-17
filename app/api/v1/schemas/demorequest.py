@@ -12,7 +12,7 @@ class UserDemoRequestCreate(BaseModel):
     business_name: Optional[str] = None
     business_size: Optional[str] = None
     business_type: Optional[str] = None
-    branch_count: PositiveInt
+    branch_count: str
     opening_type: str
     preferred_date: Optional[datetime] = None
     timezone: Optional[str] = None
@@ -32,7 +32,7 @@ class DemoRequestResponse(BaseModel):
     business_name: Optional[str] = None
     business_size: Optional[str] = None
     business_type: Optional[str] = None
-    branch_count: int
+    branch_count: str
     opening_type: str
     plan_id: Optional[int] = None
     preferred_date: Optional[datetime] = None
@@ -45,6 +45,9 @@ class DemoRequestResponse(BaseModel):
     meeting_link: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    
+    class Config:
+        from_attributes = True
     
 class PaginatedDemoRequestResponse(BaseModel):
     total: int
@@ -62,7 +65,7 @@ class DemoRequestUpdate(BaseModel):
     business_name: Optional[str] = None
     business_size: Optional[str] = None
     business_type: Optional[str] = None
-    branch_count: Optional[int] = None
+    branch_count: Optional[str] = None
     opening_type: Optional[str] = None
     plan_id: Optional[int] = None
     preferred_date: Optional[datetime] = None
