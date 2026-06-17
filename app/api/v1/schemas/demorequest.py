@@ -1,13 +1,13 @@
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, PositiveInt
+from pydantic import BaseModel, EmailStr, PositiveInt
 from uuid import UUID
 from pydantic import field_validator
 
 class UserDemoRequestCreate(BaseModel):
     first_name: str 
     last_name: str 
-    email: str 
+    email: EmailStr 
     phone: str 
     business_name: Optional[str] = None
     business_size: Optional[str] = None
@@ -27,7 +27,7 @@ class DemoRequestResponse(BaseModel):
     id: UUID
     user_id: Optional[UUID] = None
     full_name: str
-    email: str 
+    email: EmailStr 
     phone: str 
     business_name: Optional[str] = None
     business_size: Optional[str] = None

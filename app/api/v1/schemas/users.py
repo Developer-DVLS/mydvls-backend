@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
@@ -49,6 +49,12 @@ class UserResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class PaginatedUserResponse(BaseModel):
+    total: int
+    skip: int
+    limit: int
+    data: Optional[List[UserResponse]] = None  
 
 class ForgotPassword(BaseModel):
     email: EmailStr
