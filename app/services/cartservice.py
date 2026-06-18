@@ -599,8 +599,8 @@ class CartService:
         if item:
             for cache_cart_item in cache_cart_items:
                 if int(cache_cart_item.get("id")) == int(item.id):
-                    item.quantity -= item["quantity_after_combo"]
-                    item["quantity_after_combo"] = 0
+                    item.quantity -= cache_cart_item["quantity_after_combo"]
+                    cache_cart_item["quantity_after_combo"] = 0
 
                     if item.quantity <= 0:
                         await db.delete(item)
@@ -738,12 +738,6 @@ class CartService:
         if not cart.cart_products:
             return cart
         
-        # Attach products (DB enrichment only once)
-        cart = await self._attach_products(request, db, user_id, cart)
-
-        #calculate total
-        cart = self.calculate_cart_total(cart)
-        
         # check for combo offer
         combo_offers = None
         valid_combo_offers_result = await valid_combo_offers(db)
@@ -754,15 +748,23 @@ class CartService:
             )
         cart.combo_offers = combo_offers
         
-        # coupon validation
-        if remove_coupon:
-            ## remove coupon from session/ db
-            cart = await self.remove_applied_coupon(request, db, user_id, cart)
-        else:
-            cart = await self.coupon_validation(
-                request, db, cart, coupon_code, user_id
-            )     
-        cart = self.normalize_cart(cart)
+        # Apply combo offer
+        if combo_offers:
+            total_bundle_price = 0
+            total_final_price = 0
+            total_combo_discount = 0
+            for combo_offer in combo_offers:
+                total_bundle_price += combo_offer['bundle_price']
+                total_final_price += combo_offer['final_price']
+                total_combo_discount += combo_offer['discount']
+            
+            cart.subtotal += total_bundle_price
+            cart.total_discount_amount += float(total_combo_discount)
+            cart.discounted_amount += total_final_price
+            cart.total_amount += total_final_price
+
+        # Attach products (DB enrichment only once)
+        cart = await self._attach_products(request, db, user_id, cart)
 
         # check if offer (item, category, store) exists
         # first get all active offers
@@ -863,24 +865,6 @@ class CartService:
                         
                         # mark boolean for bogo in cart
                         cart.bogo_offer_exists = True
-        
-        # recalculate total cart totals
-        cart = self.calculate_cart_total(cart)
-
-        # Apply combo offer
-        if combo_offers:
-            total_bundle_price = 0
-            total_final_price = 0
-            total_combo_discount = 0
-            for combo_offer in combo_offers:
-                total_bundle_price += combo_offer['bundle_price']
-                total_final_price += combo_offer['final_price']
-                total_combo_discount += combo_offer['discount']
-            
-            cart.subtotal += total_bundle_price
-            cart.total_discount_amount += float(total_combo_discount)
-            cart.discounted_amount += total_final_price
-            cart.total_amount += total_final_price
               
         #tax calculation
         tax_percent = await self.tax_calculation(db)
@@ -891,8 +875,21 @@ class CartService:
             #total after adding tax 
             cart.total_amount = cart.total_amount + tax_amount
         
+        # cart totals
+        cart = self.calculate_cart_total(cart)
+        
+        # coupon validation
+        if remove_coupon:
+            ## remove coupon from session/ db
+            cart = await self.remove_applied_coupon(request, db, user_id, cart)
+        else:
+            cart = await self.coupon_validation(
+                request, db, cart, coupon_code, user_id
+            )     
+        cart = self.normalize_cart(cart)
+        
         # Persist (REDIS ONLY ONCE)
-        await self._persist_cart(request, response, cart)
+        # await self._persist_cart(request, response, cart)
         return cart
     
     def calculate_cart_total(self, cart):
@@ -900,20 +897,21 @@ class CartService:
         discount_amount = 0
         discounted_amount = 0
         total_amount = 0
-        tax_percent = 0
-        tax_amount =0
-        
+        # tax_percent = 0
+        # tax_amount =0
         for cart_product in cart.cart_products:
+            print("product-subtotal", cart_product.subtotal)
             subtotal += cart_product.subtotal
             discount_amount += cart_product.discount_amount
             discounted_amount += cart_product.discounted_amount
-            
-        cart.subtotal = subtotal
-        cart.discount_amount = discount_amount
-        cart.discounted_amount = discounted_amount
-        # cart.total_discount_amount = discount_amount
-        cart.tax_percent = tax_percent
-        cart.tax_amount = tax_amount
+        
+        print("cart-subtotal", cart.subtotal)
+        cart.subtotal += subtotal
+        cart.discount_amount += discount_amount
+        cart.discounted_amount += discounted_amount
+        cart.total_discount_amount += discount_amount
+        # cart.tax_percent = tax_percent
+        # cart.tax_amount = tax_amount
         
         #calculate total
         total_amount = subtotal - discount_amount
@@ -1061,6 +1059,7 @@ class CartService:
             #get coupon id from session/ db
             coupon_id = await self.get_applied_coupon(request, db, user_id)
             
+            #check coupon validity
             result = await db.execute(
                 select(Offer)
                 .where(
@@ -1071,9 +1070,7 @@ class CartService:
                     Offer.end_date >= now,
                     Offer.deleted_at.is_(None)
                 )
-
             )
-            
             coupon_offer = result.scalars().first()
             
             if not coupon_offer:
@@ -1106,6 +1103,7 @@ class CartService:
         cart.total_discount_amount += coupon_discount_amount
         
         cart.total_amount = cart.total_amount - coupon_discount_amount
+        
         ## add coupon in session/ db
         cart = await self.add_applied_coupon(request, db, user_id, coupon_offer, cart)
         return cart

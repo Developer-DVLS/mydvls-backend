@@ -229,8 +229,7 @@ async def soft_delete_offer(
         for target in offer.targets:
             target.deleted_at = datetime.utcnow()
     if offer.bogo_meta:
-        for bogo_meta in offer.bogo_meta:
-            bogo_meta.deleted_at = datetime.utcnow()
+        offer.bogo_meta.deleted_at = datetime.utcnow()
     
     offer.deleted_at = datetime.utcnow()
     await db.commit()

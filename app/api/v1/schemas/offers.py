@@ -121,6 +121,17 @@ class OfferUpdate(BaseModel):
 
     min_spent_amount: Optional[float] = None
     max_discount_amount: Optional[float] = None
+    
+    @field_validator("start_date", "end_date", mode="before")
+    @classmethod
+    def remove_timezone(cls, v):
+        if isinstance(v, str):
+            v = datetime.fromisoformat(v.replace("Z", ""))
+
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+
+        return v
 
 class OfferResponse(OfferBase):
     id: int
