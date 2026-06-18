@@ -896,6 +896,13 @@ class CartService:
         return cart
     
     def calculate_cart_total(self, cart):
+        subtotal = cart.subtotal
+        discount_amount = cart.discount_amount
+        discounted_amount = cart.discounted_amount
+        total_amount = cart.total_amount
+        tax_percent = cart.tax_percent
+        tax_amount = cart.tax_amount
+        
         for cart_product in cart.cart_products:
             subtotal += cart_product.subtotal
             discount_amount += cart_product.discount_amount
