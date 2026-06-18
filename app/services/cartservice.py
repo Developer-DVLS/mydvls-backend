@@ -744,16 +744,6 @@ class CartService:
         #calculate total
         cart = self.calculate_cart_total(cart)
         
-        # coupon validation
-        if remove_coupon:
-            ## remove coupon from session/ db
-            cart = await self.remove_applied_coupon(request, db, user_id, cart)
-        else:
-            cart = await self.coupon_validation(
-                request, db, cart, coupon_code, user_id
-            )     
-        cart = self.normalize_cart(cart)
-        
         # check for combo offer
         combo_offers = None
         valid_combo_offers_result = await valid_combo_offers(db)
@@ -763,6 +753,16 @@ class CartService:
                 combo_offers=valid_combo_offers_result
             )
         cart.combo_offers = combo_offers
+        
+        # coupon validation
+        if remove_coupon:
+            ## remove coupon from session/ db
+            cart = await self.remove_applied_coupon(request, db, user_id, cart)
+        else:
+            cart = await self.coupon_validation(
+                request, db, cart, coupon_code, user_id
+            )     
+        cart = self.normalize_cart(cart)
 
         # check if offer (item, category, store) exists
         # first get all active offers
@@ -970,14 +970,14 @@ class CartService:
             
         cart.cart_products = valid_cart_products
         
-        if not user_id:
-            redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
-            if not redis_cache_key:
-                return
+        # if not user_id:
+        #     redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+        #     if not redis_cache_key:
+        #         return
             
-            await set_cache(redis_cache_key, 
-                                cart.model_dump(mode="json"),
-                                expire=self.GUEST_CART_EXPIRY)
+        #     await set_cache(redis_cache_key, 
+        #                         cart.model_dump(mode="json"),
+        #                         expire=self.GUEST_CART_EXPIRY)
         return cart
     
     async def _attach_offer(
