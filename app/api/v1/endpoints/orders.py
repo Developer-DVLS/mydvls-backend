@@ -11,7 +11,7 @@ from app.api.v1.schemas.orders import OrderCreate, OrderDetailResponse
 from app.api.v1.schemas.payment import ChargeRequest
 from app.core.database import get_db
 from app.models.carts import Cart, CartProduct, CartStatus
-from app.models.offers import ComboOffer, Offer
+from app.models.offers import ComboOffer, ComboOfferItem, Offer
 from app.models.orders import AppliedCombo, Order
 from app.models.products import Product, ProductVariant
 from app.models.user import User
@@ -125,6 +125,8 @@ async def get_invoice(
             selectinload(Order.applied_combos)
             .selectinload(AppliedCombo.combo_offer)
             .selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant)
+            .selectinload(ProductVariant.product)
         )
         .where(Order.order_number == order_number)
     )
@@ -153,13 +155,13 @@ async def get_invoice(
         combo_qty = combo.quantity_used
 
         for c_item in combo_offer.items:
-            product_id = c_item.product_variant_id
+            product_variant_id = c_item.product_variant_id
             required_qty = c_item.quantity
 
-            if product_id not in items_map:
+            if product_variant_id not in items_map:
                 continue
 
-            order_item = items_map[product_id]
+            order_item = items_map[product_variant_id]
 
             # find or create row
             row = next(
@@ -170,10 +172,19 @@ async def get_invoice(
             if not row:
                 row = {
                     "order_item_id": order_item.id,
-                    "product_variant_id": product_id,
+                    "product_variant_id": product_variant_id,
                     "quantity": order_item.quantity,
                     "combo_quantity": 0,
                     "normal_quantity": order_item.quantity,
+                    "product_variant": {
+                        "id": c_item.product_variant.id,
+                        "sku": c_item.product_variant.sku,
+                        "price": c_item.product_variant.price,
+                        "product":{
+                            "id":c_item.product_variant.product.id,
+                            "name":c_item.product_variant.product.name
+                            }
+                    }
                 }
                 breakdown.append(row)
 
@@ -239,7 +250,16 @@ async def get_invoice(
                     "discount_value": c.combo_offer.discount_value,
                     "items": [{
                         "product_variant_id": item.product_variant_id,
-                        "quantity": item.quantity
+                        "quantity": item.quantity,
+                        "product_variant": {
+                            "id": item.product_variant.id,
+                            "sku": item.product_variant.sku,
+                            "price": item.product_variant.price,
+                            "product":{
+                                "id":item.product_variant.product.id,
+                                "name":item.product_variant.product.name
+                                }
+                        }
                     }
                         for item in c.combo_offer.items
                     ]
