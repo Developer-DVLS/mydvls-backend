@@ -43,7 +43,8 @@ async def validate_offer_conflict(
                         OfferTarget.target_id == target.target_id,
                         Offer.start_date <= end_date,
                         Offer.end_date >= start_date,
-                        Offer.is_active == True
+                        Offer.is_active == True,
+                        Offer.deleted_at.is_(None)
                     )
                 )
             )
@@ -75,7 +76,8 @@ async def validate_offer_conflict(
                     Offer.type == offer_type,
                     Offer.start_date <= end_date,
                     Offer.end_date >= start_date,
-                    Offer.is_active == True
+                    Offer.is_active == True,
+                    Offer.deleted_at.is_(None)
                 )
             )
         )
@@ -200,6 +202,7 @@ async def get_all_active_offers(db):
                 Offer.is_active == True,
                 Offer.start_date <= now,
                 Offer.end_date >= now,
+                Offer.deleted_at.is_(None)
             )
         )
         .order_by(Offer.created_at.desc())
@@ -305,11 +308,13 @@ async def get_active_offer_by_item(db, item_id: int):
                 Offer.is_active == True,
                 Offer.start_date <= now,
                 Offer.end_date >= now,
+                Offer.deleted_at.is_(None),
 
                 Offer.type == OfferType.ITEM,
 
                 OfferTarget.target_type == TargetType.ITEM,
                 OfferTarget.target_id == item_id,
+                OfferTarget.deleted_at.is_(None),
             )
         )
         .order_by(Offer.created_at.desc())
@@ -335,11 +340,13 @@ async def get_active_offer_by_item(db, item_id: int):
                 Offer.is_active == True,
                 Offer.start_date <= now,
                 Offer.end_date >= now,
+                Offer.deleted_at.is_(None),
 
                 Offer.type == OfferType.CATEGORY,
 
                 OfferTarget.target_type == TargetType.CATEGORY,
                 OfferTarget.target_id == item.category_id,
+                OfferTarget.deleted_at.is_(None),
             )
         )
         .order_by(Offer.created_at.desc())
@@ -364,6 +371,7 @@ async def get_active_offer_by_item(db, item_id: int):
                 Offer.is_active == True,
                 Offer.start_date <= now,
                 Offer.end_date >= now,
+                Offer.deleted_at.is_(None),
 
                 Offer.type == OfferType.STORE,
             )
@@ -391,10 +399,12 @@ async def get_active_offer_by_item(db, item_id: int):
                 Offer.is_active == True,
                 Offer.start_date <= now,
                 Offer.end_date >= now,
+                Offer.deleted_at.is_(None),
 
                 Offer.type == OfferType.BOGO,
 
                 OfferBOGO.buy_item_id == item_id,
+                OfferBOGO.deleted_at.is_(None)
             )
         )
         .order_by(Offer.created_at.desc())
@@ -420,7 +430,8 @@ async def check_active_offer(db, offer):
                 Offer.id ==offer.id,
                 Offer.start_date <= offer.end_date,
                 Offer.end_date >= offer.start_date,
-                Offer.is_active == True
+                Offer.is_active == True,
+                Offer.deleted_at.is_(None)
             )
         )
     )
@@ -447,6 +458,7 @@ async def valid_combo_offers(db):
             ComboOffer.is_active == True,
             ComboOffer.start_date <= now,
             ComboOffer.end_date >= now,
+            ComboOffer.deleted_at.is_(None)
         )
         .order_by(ComboOffer.priority)
     )
@@ -470,6 +482,7 @@ async def validate_combo_offer(db, combo_offer_id):
             ComboOffer.is_active == True,
             ComboOffer.start_date <= now,
             ComboOffer.end_date >= now,
+            ComboOffer.deleted_at.is_(None)
         )
     )
     

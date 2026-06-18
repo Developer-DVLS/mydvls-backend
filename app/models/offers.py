@@ -5,6 +5,7 @@ from sqlalchemy.orm import relationship
 import enum
 
 from app.core.database import Base
+from app.models.mixins import SoftDeleteMixin
 
 class OfferType(str, enum.Enum):
     ITEM = "item"
@@ -19,7 +20,7 @@ class DiscountType(str, enum.Enum):
     FREE_ITEM = "free_item"
     MINIMUM_PURCHASE = "minimum_purchase"
 
-class Offer(Base):
+class Offer(SoftDeleteMixin, Base):
     """ 
     Offer model
     A flexible and extensible model to manage promotional offers across the system.
@@ -82,7 +83,7 @@ class TargetType(str, enum.Enum):
     STORE = "store"
     
     
-class OfferTarget(Base):
+class OfferTarget(SoftDeleteMixin, Base):
     __tablename__ = "offer_targets"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -94,7 +95,7 @@ class OfferTarget(Base):
     offer = relationship("Offer", back_populates="targets")
 
 
-class OfferBOGO(Base):
+class OfferBOGO(SoftDeleteMixin, Base):
     """ 
     OfferBOGO model
     
@@ -133,7 +134,7 @@ class ComboDiscountType(str, enum.Enum):
     FIXED = "fixed"
     PERCENTAGE = "percentage"
     
-class ComboOffer(Base):
+class ComboOffer(SoftDeleteMixin, Base):
     """ 
     Combo offer model
 
@@ -178,7 +179,7 @@ class ComboOffer(Base):
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow, nullable=False)
 
-class ComboOfferItem(Base):
+class ComboOfferItem(SoftDeleteMixin, Base):
     """ 
     ComboOfferItem defines the individual product variants that belong to a ComboOffer.
     

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Float, String, DateTime, Integer, Numeric, ForeignKey, JSON, Enum
+from sqlalchemy import Column, Float, String, DateTime, Integer, Numeric, ForeignKey, Enum, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -91,6 +91,8 @@ class Order(Base):
     user = relationship("User")
     #cart relationship
     cart = relationship("Cart", back_populates="order")
+    #applied combo offers
+    applied_combos = relationship("AppliedCombo", back_populates="order")
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow,
@@ -132,4 +134,20 @@ class OrderItem(Base):
     # Relationships
     order = relationship("Order", back_populates="items")
     product_variant = relationship("ProductVariant")
-    
+
+class AppliedCombo(Base):
+    __tablename__ = "applied_combos"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    combo_offer_id = Column(Integer, ForeignKey("combo_offers.id"), nullable=False)
+
+    quantity_used = Column(Integer, nullable=False, default=1)
+    discount_amount = Column(Numeric(10, 2), nullable=False, default=0)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # relationships
+    order = relationship("Order", back_populates="applied_combos")
+    combo_offer = relationship("ComboOffer")

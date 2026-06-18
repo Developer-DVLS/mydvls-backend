@@ -5,12 +5,13 @@ from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 
 from app.core.database import Base
+from app.models.mixins import SoftDeleteMixin
 
 class CartStatus(str, enum.Enum):
     ACTIVE = "active"
     ORDERED = "ordered"
 
-class Cart(Base):
+class Cart(SoftDeleteMixin, Base):
     """ 
     Cart Model
     
@@ -34,7 +35,7 @@ class Cart(Base):
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow, nullable=False)
 
-class CartProduct(Base):
+class CartProduct(SoftDeleteMixin, Base):
     """ 
     Cart Product Model
     """

@@ -1044,6 +1044,7 @@ class CartService:
                     Offer.is_active == True,
                     Offer.start_date <= now,
                     Offer.end_date >= now,
+                    Offer.deleted_at.is_(None)
                 )
 
             )
@@ -1068,6 +1069,7 @@ class CartService:
                     Offer.is_active == True,
                     Offer.start_date <= now,
                     Offer.end_date >= now,
+                    Offer.deleted_at.is_(None)
                 )
 
             )
@@ -1129,7 +1131,8 @@ class CartService:
                 )
                 .where(
                     Cart.user_id == user_id,
-                    Cart.status == CartStatus.ACTIVE
+                    Cart.status == CartStatus.ACTIVE,
+                    Cart.deleted_at.is_(None)
                 )
             )
             user_cart = result.scalars().first()
@@ -1165,7 +1168,8 @@ class CartService:
                 )
                 .where(
                     Cart.user_id == user_id,
-                    Cart.status == CartStatus.ACTIVE
+                    Cart.status == CartStatus.ACTIVE,
+                    Cart.deleted_at.is_(None)
                 )
             )
             user_cart = result.scalars().first()
@@ -1216,7 +1220,8 @@ class CartService:
                 )
                 .where(
                     Cart.user_id == user_id,
-                    Cart.status == CartStatus.ACTIVE
+                    Cart.status == CartStatus.ACTIVE,
+                    Cart.deleted_at.is_(None)
                 )
             )
             user_cart = result.scalars().first()

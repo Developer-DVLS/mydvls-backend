@@ -35,12 +35,12 @@ async def list_contact(
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(Contact)
+    query = select(Contact).order_by(Contact.created_at.desc())
     
     return await get_paginated_result(db, query, skip, limit)
 
 @contact_router.get("/{contact_id}/", response_model=ContactResponse)
-async def list_contact(
+async def get_contact(
     contact_id: int,
     db: AsyncSession = Depends(get_db)
 ):
@@ -59,7 +59,7 @@ async def list_contact(
 
 
 @contact_router.delete("/{contact_id}/")
-async def list_contact(
+async def delete_contact(
     contact_id: int,
     db: AsyncSession = Depends(get_db)
 ):

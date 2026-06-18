@@ -10,12 +10,16 @@ from sqlalchemy.orm import selectinload
 from app.api.v1.schemas.orders import OrderCreate, OrderDetailResponse
 from app.api.v1.schemas.payment import ChargeRequest
 from app.core.database import get_db
-from app.models.carts import CartStatus
-from app.models.orders import Order
+from app.models.carts import Cart, CartProduct, CartStatus
+from app.models.offers import ComboOffer, Offer
+from app.models.orders import AppliedCombo, Order
+from app.models.products import Product, ProductVariant
 from app.models.user import User
+from app.services.cartservice import CartService
 from app.services.orderservice import OrderService
 from app.services.paymentservice import PaymentService
 from app.services.security import get_current_user_optional
+from app.utils.cache import delete_cache, get_cache
 
 order_router = APIRouter(prefix="/order", tags=['order'])
 
@@ -88,11 +92,14 @@ async def create_order(
 
 @order_router.get("/order/{order_number}/", response_model=OrderDetailResponse)
 async def get_order_by_order_number(
-    order_number: UUID,
+    order_number: str,
     db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
         select(Order)
+        .options(
+            selectinload(Order.items)
+        )
         .where(Order.order_number == order_number)
     )
     order = result.scalars().first()
@@ -103,6 +110,151 @@ async def get_order_by_order_number(
         )
 
     return order
+
+@order_router.get("/invoice/{order_number}/")
+async def get_invoice(
+    request: Request,
+    response: Response,
+    order_number: str,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Order)
+        .options(
+            selectinload(Order.items),
+            selectinload(Order.applied_combos)
+            .selectinload(AppliedCombo.combo_offer)
+            .selectinload(ComboOffer.items)
+        )
+        .where(Order.order_number == order_number)
+    )
+    order = result.scalars().first()
+    if not order:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found."
+        )
+    
+    # ----------------------------
+    # STEP 1: index items
+    # ----------------------------
+    items_map = {
+        item.product_variant_id: item
+        for item in order.items
+    }
+
+    breakdown = []
+
+    # ----------------------------
+    # STEP 2: process combos
+    # ----------------------------
+    for combo in order.applied_combos:
+        combo_offer = combo.combo_offer
+        combo_qty = combo.quantity_used
+
+        for c_item in combo_offer.items:
+            product_id = c_item.product_variant_id
+            required_qty = c_item.quantity
+
+            if product_id not in items_map:
+                continue
+
+            order_item = items_map[product_id]
+
+            # find or create row
+            row = next(
+                (r for r in breakdown if r["order_item_id"] == order_item.id),
+                None
+            )
+
+            if not row:
+                row = {
+                    "order_item_id": order_item.id,
+                    "product_variant_id": product_id,
+                    "quantity": order_item.quantity,
+                    "combo_quantity": 0,
+                    "normal_quantity": order_item.quantity,
+                }
+                breakdown.append(row)
+
+            # allocate combo qty
+            row["combo_quantity"] += combo_qty * required_qty
+
+    # ----------------------------
+    # STEP 3: finalize
+    # ----------------------------
+    for row in breakdown:
+        row["normal_quantity"] = max(
+            0,
+            row["quantity"] - row["combo_quantity"]
+        )
+
+    # ----------------------------
+    # STEP 4: build final invoice
+    # ----------------------------
+    invoice = {
+        "id": order.id,
+        "order_number": order.order_number,
+        "user_id": str(order.user_id),
+
+        "subtotal": float(order.subtotal),
+        "tax_amount": float(order.tax_amount),
+        "discount_amount": float(order.discount_amount),
+        "delivery_charge": float(order.delivery_charge),
+        "total": float(order.total),
+
+        "status": order.status,
+        "currency": order.currency,
+        "notes": order.notes,
+        
+        "receiver_first_name": order.receiver_first_name,
+        "receiver_last_name": order.receiver_last_name,
+        "receiver_email": order.receiver_email,
+        "receiver_phone": order.receiver_phone,
+        
+        "address_line1": order.address_line1,
+        "address_line2": order.address_line2,
+        "city": order.city,
+        "state": order.state,
+        "postal_code": order.postal_code,
+        "country": order.country,
+        "latitude": order.latitude,
+        "longitude": order.longitude,
+        
+        "delivery_distance": order.delivery_distance,
+        "delivery_status": order.delivery_status,
+        "payment_intent_id": order.payment_intent_id,
+        "payment_status": order.payment_status,
+        "payment_method": order.payment_method,
+        
+        "items": breakdown,
+        "applied_combos": [
+            {
+                "combo_offer_id": c.combo_offer_id,
+                "quantity_used": c.quantity_used,
+                "discount_amount": float(c.discount_amount),
+                "combo_offer": {
+                    "name": c.combo_offer.name,
+                    "discount_type": c.combo_offer.discount_type,
+                    "discount_value": c.combo_offer.discount_value,
+                    "items": [{
+                        "product_variant_id": item.product_variant_id,
+                        "quantity": item.quantity
+                    }
+                        for item in c.combo_offer.items
+                    ]
+                }
+            }
+            for c in order.applied_combos
+        ],
+        "created_at": order.created_at,
+        "updated_at": order.updated_at,
+        "confirmed_at": order.confirmed_at,
+        "completed_at": order.completed_at,
+        "cancelled_at": order.cancelled_at,
+    }
+
+    return invoice
 
 from app.core.config import settings
 @order_router.get("get_token")

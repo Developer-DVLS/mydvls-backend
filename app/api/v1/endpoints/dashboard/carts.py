@@ -25,7 +25,13 @@ async def list_carts(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only)
 ):
-    query = select(Cart).order_by(Cart.created_at.desc())
+    query = select(
+        Cart
+        ).where(
+            Cart.deleted_at.is_(None)
+            ).order_by(
+                Cart.created_at.desc()
+                )
     
     if user_id:
         query = query.where(Cart.user_id == user_id)
@@ -47,7 +53,10 @@ async def get_cart(
         .options(
             selectinload(Cart.cart_products)
         )
-        .where(Cart.id == cart_id)
+        .where(
+            Cart.id == cart_id,
+            Cart.deleted_at.is_(None)
+            )
     )
     cart = result.scalars().first()
     if not cart:
@@ -59,7 +68,7 @@ async def get_cart(
     return cart
 
 @admin_cart_router.delete("/{cart_id:int}/")
-async def delete_cart(
+async def soft_delete_cart(
     cart_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only)
@@ -77,8 +86,12 @@ async def delete_cart(
             status_code=404,
             detail="Cart not found."
         )
-    
-    await db.delete(cart)
+        
+    # soft delete 
+    if cart.cart_products:
+        for product in cart.cart_products:
+            product.deleted_at = datetime.utcnow()
+    cart.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {
@@ -111,7 +124,7 @@ async def update_cart_product(
     return cart_product
 
 @admin_cart_router.delete("/cart-product/{cart_product_id:int}/")
-async def delete_cart_product(
+async def soft_delete_cart_product(
     cart_product_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only)
@@ -127,7 +140,8 @@ async def delete_cart_product(
             detail="Cart product not found."
         )
     
-    await db.delete(cart_product)
+    #soft delete
+    cart_product.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {

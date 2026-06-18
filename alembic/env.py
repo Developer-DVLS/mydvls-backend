@@ -15,7 +15,7 @@ from app.models.offers import (Offer, OfferTarget, OfferBOGO, ComboOffer, ComboO
 from app.models.carts import (Cart, CartProduct)
 from app.models.delivery import DeliveryConfig
 from app.models.tax import TaxConfig
-from app.models.orders import (Order, OrderItem)
+from app.models.orders import (Order, OrderItem, AppliedCombo)
 from app.models.demorequest import DemoRequest
 from app.models.subscriptionplan import SubscriptionPlan
 from app.models.contacts import Contact

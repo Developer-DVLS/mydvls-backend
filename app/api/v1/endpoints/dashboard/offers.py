@@ -111,6 +111,8 @@ async def list_offer(
     query = select(Offer).options(
         selectinload(Offer.targets),
         selectinload(Offer.bogo_meta)
+    ).where(
+        Offer.deleted_at.is_(None)
     ).order_by(Offer.created_at.desc())
     
     #filters
@@ -135,7 +137,10 @@ async def get_offer(
     query = select(Offer).options(
         selectinload(Offer.targets),
         selectinload(Offer.bogo_meta)
-    ).where(Offer.id == offer_id)
+    ).where(
+        Offer.id == offer_id,
+        Offer.deleted_at.is_(None)
+        )
     result = await db.execute(query)
     return result.scalars().first
 
@@ -149,7 +154,10 @@ async def update_offer(
     result = await db.execute(
         select(Offer)
         .options(selectinload(Offer.targets))
-        .where(Offer.id == offer_id)
+        .where(
+            Offer.id == offer_id,
+            Offer.deleted_at.is_(None)
+            )
     )
     offer = result.scalars().first()
     if not offer:
@@ -189,14 +197,21 @@ async def update_offer(
     return offer
 
 @offer_router.delete("/{offer_id:int}")
-async def delete_offer(
+async def soft_delete_offer(
     offer_id: int,
     current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Offer)
-        .where(Offer.id == offer_id)
+        .options(
+            selectinload(Offer.targets),
+            selectinload(Offer.bogo_meta)
+        )
+        .where(
+            Offer.id == offer_id,
+            Offer.deleted_at.is_(None)
+            )
     )
     offer = result.scalars().first()
     if not offer:
@@ -209,7 +224,15 @@ async def delete_offer(
     if  await check_active_offer(db, offer):
         await delete_cache(PRODUCT_CACHE_KEY)
     
-    await db.delete(offer)
+    # soft delete
+    if offer.targets:
+        for target in offer.targets:
+            target.deleted_at = datetime.utcnow()
+    if offer.bogo_meta:
+        for bogo_meta in offer.bogo_meta:
+            bogo_meta.deleted_at = datetime.utcnow()
+    
+    offer.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {
@@ -227,7 +250,10 @@ async def update_target_type(
     result = await db.execute(
         select(OfferTarget)
         .options(OfferTarget.offer)
-        .where(OfferTarget.id == target_type_id)
+        .where(
+            OfferTarget.id == target_type_id,
+            OfferTarget.deleted_at.is_(None)
+            )
     )
     offer_target = result.scalars().first()
     if not offer_target:
@@ -259,7 +285,7 @@ async def update_target_type(
     return offer_target
 
 @offer_router.delete("/target-type/{target_type_id}")
-async def delete_target_type(
+async def soft_delete_target_type(
     target_type_id: int,
     current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db)
@@ -267,7 +293,10 @@ async def delete_target_type(
     result = await db.execute(
         select(OfferTarget)
         .options(selectinload(OfferTarget.offer))
-        .where(OfferTarget.id == target_type_id)
+        .where(
+            OfferTarget.id == target_type_id,
+            OfferTarget.deleted_at.is_(None)
+            )
     )
     offer_target = result.scalars().first()
     if not offer_target:
@@ -280,7 +309,8 @@ async def delete_target_type(
     if  await check_active_offer(db, offer_target.offer):
         await delete_cache(PRODUCT_CACHE_KEY)
 
-    await db.delete(offer_target)
+    #soft delete
+    offer_target.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {
@@ -298,7 +328,10 @@ async def update_offer_bogo(
     result = await db.execute(
         select(OfferBOGO)
         .options(selectinload(OfferBOGO.offer))
-        .where(OfferBOGO.id == offer_bogo_id)
+        .where(
+            OfferBOGO.id == offer_bogo_id,
+            OfferBOGO.deleted_at.is_(None)
+            )
     )
     offer_bogo = result.scalars().first()
     if not offer_bogo:
@@ -327,7 +360,7 @@ async def update_offer_bogo(
     return offer_bogo
 
 @offer_router.delete("/offer-bogo/{offer_bogo_id}")
-async def delete_offer_bogo(
+async def soft_delete_offer_bogo(
     offer_bogo_id: int,
     current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db)
@@ -335,7 +368,10 @@ async def delete_offer_bogo(
     result = await db.execute(
         select(OfferBOGO)
         .options(selectinload(OfferBOGO.offer))
-        .where(OfferBOGO.id == offer_bogo_id)
+        .where(
+            OfferBOGO.id == offer_bogo_id,
+            OfferBOGO.deleted_at.is_(None)
+            )
     )
     offer_bogo = result.scalars().first()
     if not offer_bogo:
@@ -348,7 +384,8 @@ async def delete_offer_bogo(
     if  await check_active_offer(db, offer_bogo.offer):
         await delete_cache(PRODUCT_CACHE_KEY)
     
-    await db.delete(offer_bogo)
+    #soft delete
+    offer_bogo.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {
@@ -423,8 +460,10 @@ async def list_combo_offer(
     end_date: Optional[datetime] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(ComboOffer).options(
-        selectinload(ComboOffer.items)
+    query = select(ComboOffer).where(
+        ComboOffer.deleted_at.is_(None)
+        ).options(
+            selectinload(ComboOffer.items)
             .selectinload(ComboOfferItem.product_variant)
             .selectinload(ProductVariant.product)
     ).order_by(ComboOffer.created_at.desc())
@@ -450,7 +489,10 @@ async def get_combo_offer(
         selectinload(ComboOffer.items)
             .selectinload(ComboOfferItem.product_variant)
             .selectinload(ProductVariant.product)
-    ).where(ComboOffer.id == offer_id)
+    ).where(
+        ComboOffer.id == offer_id,
+        ComboOffer.deleted_at.is_(None)
+        )
     result = await db.execute(query)
     return result.scalars().first()
 
@@ -464,7 +506,10 @@ async def update_combo_offer(
     result = await db.execute(
         select(ComboOffer)
         .options(selectinload(ComboOffer.items))
-        .where(ComboOffer.id == offer_id)
+        .where(
+            ComboOffer.id == offer_id,
+            ComboOffer.deleted_at.is_(None)
+            )
     )
     combo_offer = result.scalars().first()
     if not combo_offer:
@@ -500,13 +545,16 @@ async def update_combo_offer(
 
 
 @offer_router.delete("/combo-offer/{offer_id:int}/")
-async def delete_combo_offer(
+async def soft_delete_combo_offer(
     offer_id: int,
     current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(ComboOffer)
+        .options(
+            selectinload(ComboOffer.items)
+        )
         .where(ComboOffer.id == offer_id)
     )
     combo_offer = result.scalars().first()
@@ -516,7 +564,12 @@ async def delete_combo_offer(
             detail="Offer not found"
         )
     
-    await db.delete(combo_offer)
+    #soft delete
+    if combo_offer.items:
+        for item in combo_offer.items:
+            item.deleted_at = datetime.utcnow()
+        
+    combo_offer.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {
@@ -542,7 +595,7 @@ async def delete_combo_offer(
 #     return offer_item
 
 @offer_router.delete("/combo-offer-item/{offer_item_id:int}/")
-async def delete_combo_offer_item(
+async def soft_delete_combo_offer_item(
     offer_item_id: int,
     current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db),
@@ -558,7 +611,8 @@ async def delete_combo_offer_item(
             detail="Offer item not found"
         )
     
-    await db.delete(combo_offer_item)
+    #soft delete
+    combo_offer_item.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {

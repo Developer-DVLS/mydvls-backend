@@ -10,7 +10,7 @@ from app.api.v1.schemas.carts import CartResponse
 from app.api.v1.schemas.orders import OrderCreate
 from app.models.carts import CartProduct
 from app.models.offers import Offer
-from app.models.orders import Order, OrderItem
+from app.models.orders import AppliedCombo, Order, OrderItem
 from app.models.user import User, UserRole
 from app.services.cartservice import CartService
 from app.services.userservice import UserService
@@ -159,6 +159,17 @@ class OrderService:
                 total_price=item.unit_price * item.quantity,
             )
             self.db.add(order_item)
+        
+        # Assign combo-offer to order if any applied
+        if enriched_cart.combo_offers:
+            for combo_offer in enriched_cart.combo_offers:
+                applied_combo = AppliedCombo(
+                    order_id = order.id,
+                    combo_offer_id = combo_offer["id"],
+                    quantity_used = combo_offer["applied_count"],
+                    discount_amount = combo_offer["discount"]
+                )
+                self.db.add(applied_combo)
 
         await self.db.commit()
         await self.db.refresh(order)
