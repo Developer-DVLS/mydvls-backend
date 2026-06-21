@@ -167,19 +167,21 @@ async def shop_products_list(
                         "discount_type": best_offer.discount_type,
                         "discount_value":best_offer.discount_value
                     }
-
+                
+            # get image-url
+            image_url = None
+            for variant in p.variants:
+                if variant.images:
+                    image_url = variant.images[0].image_url
+                    break
+            
             response.append({
                 "id": p.id,
                 "name": p.name,
                 "description": p.description,
                 "is_featured": p.is_featured,
                 "price": str(p.variants[0].price )if p.variants else 0,
-                "image": (
-                    p.variants[0].images[0].image_url
-                    if p.variants
-                    and p.variants[0].images
-                    else None
-                ),
+                "image_url": image_url,
                 "category_id": p.category_id,
                 "best_offer": best_offer_data
             })
