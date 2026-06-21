@@ -258,12 +258,20 @@ class CartService:
         for item in items:
             if int(item.get("id")) == int(cart_product_id):
                 if quantity > item["quantity"]:
-                    quantity_change = quantity - item["quantity_after_combo"]
+                    if "quantity_after_combo" in item:
+                        quantity_change = quantity - item["quantity_after_combo"]
+                    else:
+                        quantity_change = quantity - item["quantity"]
+                    
                     item["quantity"] += quantity_change
                     item["quantity_after_combo"] = quantity
                     
                 if quantity < item["quantity"]:
-                    quantity_change = item["quantity_after_combo"] - quantity
+                    if "quantity_after_combo" in item:
+                        quantity_change = item["quantity_after_combo"] - quantity
+                    else:
+                        quantity_change = item["quantity"] - quantity
+                        
                     item["quantity"] -= quantity_change
                     item["quantity_after_combo"] = quantity
 
