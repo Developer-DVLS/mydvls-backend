@@ -55,6 +55,7 @@ class ProductAttributeUpdate(BaseModel):
 class ProductVariantRequest(ProductVariantBase):
     variant_images: Optional[List[ProductVariantImageRequest]] = None
     attributes: Optional[List[ProductAttributeRequest]] = None
+    variant_option_value_ids: Optional[List[int]] = []
 
 class ProductVariantUpdate(BaseModel):
     product_id: Optional[int] = None
@@ -65,6 +66,7 @@ class ProductVariantUpdate(BaseModel):
     stock_quantity: Optional[int] = None
     is_active: Optional[bool] = None
     is_featured: Optional[bool] = None
+    variant_option_value_ids: Optional[List[int]] = []
     
 # class ProductVariantResponse(ProductVariantBase):
 #     id: int
@@ -93,6 +95,14 @@ class ProductAttributeMini(BaseModel):
     key: str
     value: str
 
+class VariantOptionMini(BaseModel):
+    id: int 
+    name: str 
+class VariantOptionMini(BaseModel):
+    id: int 
+    value: str
+    variant_option: VariantOptionMini
+    
 class ProductVariantResponse(ProductVariantBase):
     id: int
     created_at: datetime
@@ -100,6 +110,7 @@ class ProductVariantResponse(ProductVariantBase):
     product: Optional[ProductMini] = None
     images: Optional[List[ImageMini]] = None
     attributes: Optional[List[ProductAttributeMini]] = None
+    variant_options: Optional[List[VariantOptionMini]] = None
 
     class Config:
         from_attributes = True

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.schemas.productvariants import CreateProductVariantImage, PaginatedProductVariantResponse, ProductAttributeCreate, ProductAttributeMini, ProductAttributeRequest, ProductAttributeResponse, ProductAttributeUpdate, ProductVariantDropdown, ProductVariantImageBase, ProductVariantImageResponse, ProductVariantRequest, ProductVariantResponse, ProductVariantUpdate
 from app.core.database import get_db
-from app.models.products import Product, ProductAttribute, ProductVariant, ProductVariantImage
+from app.models.products import Product, ProductAttribute, ProductVariant, ProductVariantImage, VariantOptionValue
 from app.models.user import User
 from app.auth.permissions import staff_only
 from app.utils.pagination import get_paginated_result
@@ -29,6 +29,8 @@ async def list_variants(
         selectinload(ProductVariant.product),
         selectinload(ProductVariant.attributes),
         selectinload(ProductVariant.images),
+        selectinload(ProductVariant.variant_options)
+            .selectinload(VariantOptionValue.variant_option)
     ).order_by(ProductVariant.created_at.desc())
     
     # search by SKU or product name
@@ -99,6 +101,8 @@ async def get_variant(
             selectinload(ProductVariant.product),
             selectinload(ProductVariant.attributes),
             selectinload(ProductVariant.images),
+            selectinload(ProductVariant.variant_options)
+            .selectinload(VariantOptionValue.variant_option)
         )
         .where(ProductVariant.id == variant_id)
     )
@@ -133,6 +137,20 @@ async def create_variant(
     
     if sku_exists:
         raise HTTPException(status_code=409, detail="Product variant with same SKU already exists")
+    
+    ## check if there is any variant options 
+    variant_options = []
+    if data.variant_option_value_ids:
+        ids = data.variant_option_value_ids or []
+
+        result = await db.execute(
+            select(VariantOptionValue).where(
+                VariantOptionValue.id.in_(ids)
+            )
+        )
+        variant_options = result.scalars().all()
+        if not variant_options:
+            raise HTTPException(status_code=409, detail="Invalid variant option value.")
 
     new_variant = ProductVariant(
         product_id=data.product_id,
@@ -144,6 +162,9 @@ async def create_variant(
         is_active=data.is_active,
         is_featured=data.is_featured,
     )
+    
+    ##assign variant-option
+    new_variant.variant_options = variant_options
 
     db.add(new_variant)
     await db.commit()
@@ -180,6 +201,8 @@ async def create_variant(
             selectinload(ProductVariant.product),
             selectinload(ProductVariant.attributes),
             selectinload(ProductVariant.images),
+            selectinload(ProductVariant.variant_options)
+            .selectinload(VariantOptionValue.variant_option)
         )
         .where(ProductVariant.id == new_variant.id)
     )
@@ -197,7 +220,11 @@ async def update_variant(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(ProductVariant).where(ProductVariant.id == variant_id)
+        select(ProductVariant)
+        .options(
+            selectinload(ProductVariant.variant_options)
+        )
+        .where(ProductVariant.id == variant_id)
     )
     variant = result.scalars().first()
 
@@ -231,6 +258,26 @@ async def update_variant(
     # apply only provided fields
     for field, value in update_data.items():
         setattr(variant, field, value)
+        
+    if "variant_option_value_ids" in update_data:
+        ids = update_data["variant_option_value_ids"] or []
+
+        result = await db.execute(
+            select(VariantOptionValue).where(
+                VariantOptionValue.id.in_(ids)
+            )
+        )
+
+        variant_values = result.scalars().all()
+
+        if len(variant_values) != len(ids):
+            raise HTTPException(400, "Invalid variant option values")
+
+        # clear old relations
+        variant.variant_options.clear()
+
+        # assign new ones
+        variant.variant_options = variant_values
 
     await db.commit()
 
@@ -240,7 +287,11 @@ async def update_variant(
         .options(
             selectinload(ProductVariant.product),
             selectinload(ProductVariant.attributes),
-            selectinload(ProductVariant.images)
+            selectinload(ProductVariant.images),
+            selectinload(ProductVariant.variant_options)
+            .selectinload(VariantOptionValue.variant_option),
+            selectinload(ProductVariant.variant_options)
+            .selectinload(VariantOptionValue.variant_option)
         )
         .where(ProductVariant.id == variant.id)
     )

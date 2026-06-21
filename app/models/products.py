@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, Boolean, Text, DateTime, Float
+from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, Boolean, Text, DateTime, Table, UniqueConstraint
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 
@@ -43,6 +43,79 @@ class Product(Base):
     
     category = relationship("ProductCategory", back_populates="products")
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
+    variant_options = relationship("VariantOption", back_populates="product",cascade="all, delete-orphan")
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow,
+                        onupdate=datetime.utcnow, nullable=False)
+
+class VariantOption(Base):
+    __tablename__ = "product_options"
+    
+    __table_args__ = (
+        UniqueConstraint(
+            "product_id",
+            "name",
+            name="uq_product_option"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id", ondelete="CASCADE"),
+        index=True
+    )
+
+    name = Column(String, nullable=False)  # Color, Size, Till Size
+    is_active = Column(Boolean, default=False)
+    description = Column(Text, nullable=True)
+    
+    product = relationship("Product", back_populates="variant_options")
+
+    values = relationship(
+        "VariantOptionValue",
+        back_populates="variant_option",
+        cascade="all, delete-orphan"
+    )
+    
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow,
+                        onupdate=datetime.utcnow, nullable=False)
+    
+    
+product_variant_options_value = Table(
+    "product_variant_options_value",
+    Base.metadata,
+    Column("product_variant_id", Integer, ForeignKey("product_variants.id"), primary_key=True),
+    Column("variant_option_value_id", Integer, ForeignKey("variant_option_values.id"), primary_key=True),
+)
+
+class VariantOptionValue(Base):
+    __tablename__ = "variant_option_values"
+    
+    __table_args__ = (
+        UniqueConstraint(
+            "option_id",
+            "value",
+            name="uq_option_value"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    option_id = Column(
+        Integer,
+        ForeignKey("product_options.id", ondelete="CASCADE"),
+        index=True
+    )
+
+    value = Column(String, nullable=False)
+    is_active = Column(Boolean, default=False)
+    description = Column(Text, nullable=True)
+
+    variant_option = relationship("VariantOption", back_populates="values")
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow,
@@ -70,6 +143,11 @@ class ProductVariant(Base):
     attributes = relationship("ProductAttribute", back_populates="variant", cascade="all, delete-orphan")
     images = relationship("ProductVariantImage", back_populates="variant", cascade="all, delete-orphan")
     
+    variant_options = relationship(
+        "VariantOptionValue",
+        secondary=product_variant_options_value
+    )
+    
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow, nullable=False)
@@ -90,8 +168,8 @@ class ProductAttribute(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     variant_id = Column(Integer, ForeignKey("product_variants.id", ondelete="CASCADE"))
-    key = Column(String)   # e.g., "Color"
-    value = Column(String) # e.g., "Matte Black"
+    key = Column(String) 
+    value = Column(String)
     
     # relationship
     variant = relationship("ProductVariant", back_populates="attributes")

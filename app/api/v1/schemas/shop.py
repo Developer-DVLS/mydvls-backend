@@ -86,6 +86,21 @@ class ShopProductAttribute(BaseModel):
     
     class Config:
         from_attributes = True
+        
+class ShopVariantOptionMini(BaseModel):
+    id: int 
+    name: str 
+    
+    class Config:
+        from_attributes = True
+        
+class ShopVariantOptionValueMini(BaseModel):
+    id: int 
+    value: str
+    variant_option: ShopVariantOptionMini
+    
+    class Config:
+        from_attributes = True
 
 class ShopProductVariant(BaseModel):
     id: int
@@ -99,18 +114,35 @@ class ShopProductVariant(BaseModel):
     
     images: Optional[List[ShopImageMini]] = None
     attributes: Optional[List[ShopProductAttribute]] = None
+    variant_options: Optional[List[ShopVariantOptionValueMini]] = None
     
     best_offer: Optional[ShopOfferRead] = None
     
     class Config:
         from_attributes = True
+
+
+class ShopDetailVariantOptionValueMini(BaseModel):
+    id: int 
+    value: str
     
+    class Config:
+        from_attributes = True
+        
+class ShopDetailVariantOptionMini(BaseModel):
+    id: int 
+    name: str 
+    values: List[ShopDetailVariantOptionValueMini]
+    
+    class Config:
+        from_attributes = True
         
 class ShopProductDetailResponse(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
     category: ShopCategoryResponse
+    variant_options: Optional[List[ShopDetailVariantOptionMini]] = None
     variants: Optional[List[ShopProductVariant]] = None
     
     class Config:

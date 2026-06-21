@@ -91,3 +91,66 @@ class NestedProductResponse(BaseModel):
 class ProductDropdown(BaseModel):
     id: int
     name: str
+    
+    
+class VariantOptionValueNestedRequest(BaseModel):
+    value: str
+    is_active: bool
+    description: Optional[str]
+    
+class VariantOptionNestedRequest(BaseModel):
+    name: str
+    is_active: bool
+    description: Optional[str]
+    
+    values: List[VariantOptionValueNestedRequest]
+
+class CreateNestedProductWithVariantOption(BaseModel):
+    category_id: int
+    name: str
+    description: Optional[str] = None
+    is_active: bool = False
+    is_featured: bool = False
+
+    variant_options: Optional[List[VariantOptionNestedRequest]] = None
+    
+
+class VariantOptionResponse(BaseModel):
+    id: int
+    product_id: int 
+    name: str
+    is_active: bool
+    description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+class CreateVariantOption(BaseModel):
+    product_id: int
+    name: str
+    is_active: bool
+    description: Optional[str] = None
+    
+class VariantOptionUpdate(BaseModel):
+    name: Optional[str] = None
+    is_active: Optional[bool] = None
+    description: Optional[str] = None
+    
+class VariantOptionValueResponse(BaseModel):
+    id: int
+    option_id: int 
+    value: str 
+    is_active: bool 
+    description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+class CreateVariantOptionValue(BaseModel):
+    option_id: int
+    value: str
+    is_active: bool
+    description: Optional[str] = None
+    
+class VariantOptionValueUpdate(BaseModel):
+    value: Optional[str] = None
+    is_active: Optional[bool] = None
+    description: Optional[str] = None

@@ -10,7 +10,7 @@ from app.api.v1.schemas.offers import ComboOfferDetailResponse, ComboOfferRespon
 from app.api.v1.schemas.shop import PaginatedShopProductResponse, ShopProductDetailResponse
 from app.core.database import get_db
 from app.models.offers import ComboOffer, ComboOfferItem, OfferType
-from app.models.products import Product, ProductVariant
+from app.models.products import Product, ProductVariant, VariantOption, VariantOptionValue
 from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer, valid_combo_offers
 from app.services.shopservice import ShopService
 from app.utils.cache import get_cache, set_cache
@@ -237,7 +237,12 @@ async def product_detail(
         .options(
             selectinload(Product.variants).selectinload(ProductVariant.images),
             selectinload(Product.variants).selectinload(ProductVariant.attributes),
-            selectinload(Product.category)
+            selectinload(Product.category),
+            selectinload(Product.variants)
+            .selectinload(ProductVariant.variant_options)
+            .selectinload(VariantOptionValue.variant_option),
+            selectinload(Product.variant_options)
+            .selectinload(VariantOption.values)
         )
         .where(
             Product.id == product_id,
