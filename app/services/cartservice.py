@@ -204,8 +204,7 @@ class CartService:
                 "status": "active",
                 "user_id": None,
                 "coupon_id": None,
-                "cart_products": [],
-                "subtotal": 0
+                "cart_products": []
                 }
 
         items = cart["cart_products"]
@@ -742,7 +741,8 @@ class CartService:
         combo_offers = None
         valid_combo_offers_result = await valid_combo_offers(db)
         if valid_combo_offers_result:
-            combo_offers =  self.apply_combo_offers(
+            combo_offers =  await self.apply_combo_offers(
+                request,
                 cart_items=cart.cart_products,
                 combo_offers=valid_combo_offers_result
             )
@@ -900,12 +900,10 @@ class CartService:
         # tax_percent = 0
         # tax_amount =0
         for cart_product in cart.cart_products:
-            print("product-subtotal", cart_product.subtotal)
             subtotal += cart_product.subtotal
             discount_amount += cart_product.discount_amount
             discounted_amount += cart_product.discounted_amount
         
-        print("cart-subtotal", cart.subtotal)
         cart.subtotal += subtotal
         cart.discount_amount += discount_amount
         cart.discounted_amount += discounted_amount
@@ -916,7 +914,8 @@ class CartService:
         #calculate total
         total_amount = subtotal - discount_amount
         
-        cart.total_amount = total_amount
+        cart.total_amount += total_amount
+        
         return cart
         
     async def _attach_products(self, request, db, user_id, cart: CartResponse):
@@ -1050,7 +1049,7 @@ class CartService:
 
             if not coupon_offer:
                 cart.coupon_id = None
-                cart.coupon_applied = False
+                cart.coupon_applied = True
                 cart.coupon_applicable = False
                 cart.coupon_message = "Invalid coupon code."
 
@@ -1074,7 +1073,7 @@ class CartService:
             coupon_offer = result.scalars().first()
             
             if not coupon_offer:
-                cart.coupon_applied = False
+                cart.coupon_applied = True
                 cart.coupon_applicable = False
                 cart.coupon_message = "Invalid coupon code."
 
@@ -1243,19 +1242,23 @@ class CartService:
             redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
             if not redis_cache_key:
                 return
-            # cart = await get_cache(redis_cache_key)
-            # if not cart:
-            #     return
-            cart.coupon_id = None
-            cart.coupon_applied = False
-            cart.coupon_applicable = False
-            cart.coupon_message = "No coupon applied."
-                        
-            await set_cache(redis_cache_key, 
-                            cart.model_dump(mode="json"),
-                            expire=self.GUEST_CART_EXPIRY)
+            cached_cart = await get_cache(redis_cache_key)
+
+            if not cached_cart:
+                return None
+
+            cached_cart["coupon_id"] = None
             
-            cart = await get_cache(redis_cache_key)
+            await set_cache(redis_cache_key, 
+                cached_cart,
+                expire=self.GUEST_CART_EXPIRY)
+            
+            # cart = await get_cache(redis_cache_key)
+            
+            # cart.coupon_applied = False
+            # cart.coupon_applicable = False
+            # cart.coupon_message = "No coupon applied."   
+
             return cart
     
     # ======================================================
@@ -1379,7 +1382,7 @@ class CartService:
 
         return max_count or 0
 
-    def consume_stock(self, combo_offer, stock, count, cart_items):
+    async def consume_stock(self, request, combo_offer, stock, count, cart_items):
         """
         Deduct stock used by an applied combo offer.
 
@@ -1388,14 +1391,38 @@ class CartService:
             stock: Mutable stock map.
             count: Number of times the combo was applied.
         """
+        
+        # update cache data as well 
+        #get cache data
+        cache_cart = []
+        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+        if redis_cache_key:
+            cache_cart = await get_cache(redis_cache_key)
+        
         for item in combo_offer.items:
             stock[item.product_variant_id] -= item.quantity * count
         
         # sync remaining quantities back to cart items
         for cart_item in cart_items:
             cart_item.quantity_after_combo = stock[cart_item.product_variant_id]
+            
+            if cache_cart:
+                cache_item = next(
+                    (
+                        item for item in cache_cart["cart_products"]
+                        if item["id"] == cart_item.id
+                    ),
+                    None
+                )
+
+                if cache_item:
+                    cache_item["quantity_after_combo"] = cart_item.quantity_after_combo
+
+        # persist cache
+        if cache_cart:
+            await set_cache(redis_cache_key, cache_cart)
     
-    def apply_combo_offers(self, cart_items, combo_offers):
+    async def apply_combo_offers(self, request, cart_items, combo_offers):
         """
         Apply combo offers against cart inventory.
 
@@ -1438,7 +1465,7 @@ class CartService:
                 discount = total_bundle - (offer.discount_value * max_count)
 
             # CRITICAL STEP
-            self.consume_stock(offer, stock, max_count, cart_items)
+            await self.consume_stock(request, offer, stock, max_count, cart_items)
             
             results.append({
                 "id": offer.id,
