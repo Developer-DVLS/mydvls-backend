@@ -123,6 +123,10 @@ class VariantOptionResponse(BaseModel):
     description: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+class VariantOptionDropdownResponse(BaseModel):
+    id: int
+    name: str
     
 class CreateVariantOption(BaseModel):
     product_id: int

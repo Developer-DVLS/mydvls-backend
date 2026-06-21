@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 
-from app.api.v1.schemas.products import CreateNestedProductWithVariantOption, CreateVariantOption, CreateVariantOptionValue, NestedProductResponse, PaginatedProductResponse, ProductCreateRequest, ProductDropdown, ProductRequest, ProductResponse, ProductUpdate, VariantOptionResponse, VariantOptionUpdate, VariantOptionValueResponse, VariantOptionValueUpdate
+from app.api.v1.schemas.products import CreateNestedProductWithVariantOption, CreateVariantOption, CreateVariantOptionValue, NestedProductResponse, PaginatedProductResponse, ProductCreateRequest, ProductDropdown, ProductRequest, ProductResponse, ProductUpdate, VariantOptionDropdownResponse, VariantOptionResponse, VariantOptionUpdate, VariantOptionValueResponse, VariantOptionValueUpdate
 from app.core.database import get_db
 from app.models.products import Product, ProductCategory, ProductVariant, VariantOption, VariantOptionValue
 from app.models.user import User
@@ -344,6 +344,22 @@ async def create_product_with_variant_options(
     
 @product_router.get('/variant-option/', response_model=List[VariantOptionResponse])
 async def list_variant_options(
+    product_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    query = select(VariantOption).order_by(VariantOption.created_at.desc())
+        
+    if product_id:
+        query = query.where(
+            VariantOption.product_id == product_id
+        )
+        
+    result = await db.execute(query)
+    options = result.scalars().all()
+    return options
+
+@product_router.get('/variant-option/dropdown/', response_model=List[VariantOptionDropdownResponse])
+async def variant_options_dropdown(
     product_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db)
 ):
