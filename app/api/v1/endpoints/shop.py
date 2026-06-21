@@ -120,7 +120,14 @@ async def shop_products_list(
     cached_data = await get_cache(PRODUCT_CACHE_KEY)
 
     if not cached_data:
-        query = select(Product).where(Product.is_active == True).order_by(Product.created_at.desc())
+        query = select(Product).options(
+                selectinload(Product.variants)
+            ).where(
+                Product.is_active == True,
+                Product.variants.any(ProductVariant.is_active == True)
+            ).order_by(
+                Product.created_at.desc()
+                )
 
         if search:
             query = query.where(Product.name.ilike(f"%{search}%"))
