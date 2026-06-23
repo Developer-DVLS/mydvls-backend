@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.api.v1.schemas.carts import CartBOGOFreeItem, CartBOGOMeta, CartGetItem, CartGetItemProduct, CartOfferResponse, CartResponse, ProductVariantResponse
 from app.models.carts import Cart, CartProduct, CartStatus
 from app.models.offers import ComboDiscountType, ComboOffer, DiscountType, Offer, OfferType
-from app.models.products import Product, ProductCategory, ProductVariant
+from app.models.products import Product, ProductCategory, ProductVariant, VariantOptionValue
 from app.models.tax import TaxConfig, TaxScope
 from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer, valid_combo_offers
 from app.utils.cache import delete_cache, get_cache, set_cache
@@ -691,6 +691,11 @@ class CartService:
                 selectinload(Cart.cart_products)
                 .selectinload(CartProduct.product_variant)
                 .selectinload(ProductVariant.images),
+                
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.variant_options)
+                .selectinload(VariantOptionValue.variant_option)
             )
             .where(Cart.id == cart.id)
         )
@@ -935,6 +940,8 @@ class CartService:
                 selectinload(ProductVariant.product),
                 selectinload(ProductVariant.product).selectinload(Product.category),
                 selectinload(ProductVariant.images),
+                selectinload(ProductVariant.variant_options)
+                .selectinload(VariantOptionValue.variant_option)
             )
             .where(ProductVariant.id.in_(variant_ids))
         )

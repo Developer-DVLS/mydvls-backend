@@ -25,7 +25,15 @@ class VariantImageResponse(BaseModel):
     
     class Config:
         from_attributes = True
-    
+
+class CartVariantOptionResponse(BaseModel):
+    id: int
+    name: str
+
+class CartVariantOptionValueResponse(BaseModel):
+    id: int
+    value: str
+    variant_option: CartVariantOptionResponse
 class ProductVariantResponse(BaseModel):
     id: int
     sku: str
@@ -34,6 +42,7 @@ class ProductVariantResponse(BaseModel):
     product: Optional[ProductResponse] = None
     # images: Optional[List[VariantImageResponse]] = None
     image: Optional[str] = None
+    variant_options: Optional[List[CartVariantOptionValueResponse]] = None
     
     class Config:
         from_attributes = True

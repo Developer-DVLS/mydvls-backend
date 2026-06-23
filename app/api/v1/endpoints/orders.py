@@ -12,8 +12,8 @@ from app.api.v1.schemas.payment import ChargeRequest
 from app.core.database import get_db
 from app.models.carts import Cart, CartProduct, CartStatus
 from app.models.offers import ComboOffer, ComboOfferItem, Offer
-from app.models.orders import AppliedCombo, Order
-from app.models.products import Product, ProductVariant
+from app.models.orders import AppliedCombo, Order, OrderItem
+from app.models.products import Product, ProductVariant, VariantOption, VariantOptionValue
 from app.models.user import User
 from app.services.cartservice import CartService
 from app.services.orderservice import OrderService
@@ -122,11 +122,29 @@ async def get_invoice(
         select(Order)
         .options(
             selectinload(Order.items),
+            
+            selectinload(Order.items)
+            .selectinload(OrderItem.product_variant)
+            .selectinload(ProductVariant.product),
+            
+            selectinload(Order.items)
+            .selectinload(OrderItem.product_variant)
+            .selectinload(ProductVariant.variant_options)
+            .selectinload(VariantOptionValue.variant_option),
+        
             selectinload(Order.applied_combos)
             .selectinload(AppliedCombo.combo_offer)
             .selectinload(ComboOffer.items)
             .selectinload(ComboOfferItem.product_variant)
-            .selectinload(ProductVariant.product)
+            .selectinload(ProductVariant.product),
+            
+            selectinload(Order.applied_combos)
+            .selectinload(AppliedCombo.combo_offer)
+            .selectinload(ComboOffer.items)
+            .selectinload(ComboOfferItem.product_variant)
+            .selectinload(ProductVariant.variant_options)
+            .selectinload(VariantOptionValue.variant_option)
+        
         )
         .where(Order.order_number == order_number)
     )
@@ -140,12 +158,41 @@ async def get_invoice(
     # ----------------------------
     # STEP 1: index items
     # ----------------------------
-    items_map = {
-        item.product_variant_id: item
-        for item in order.items
-    }
 
-    breakdown = []
+    breakdown = [
+        {
+            "order_item_id": item.id,
+            "product_variant_id": item.product_variant_id,
+            "quantity": item.quantity,
+            "combo_quantity": 0,
+            "normal_quantity": item.quantity,
+            "product_variant": {
+                "id": item.product_variant.id,
+                "sku": item.product_variant.sku,
+                "price": item.product_variant.price,
+                "variant_options": [{
+                    "id": variant_option_value.id,
+                    "value": variant_option_value.value,
+                    "variant_option": {
+                        "id": variant_option_value.variant_option.id,
+                        "name": variant_option_value.variant_option.name,
+                        }
+                }
+                    for variant_option_value in item.product_variant.variant_options
+                ],
+                "product": {
+                    "id": item.product_variant.product.id,
+                    "name": item.product_variant.product.name
+                }
+            }
+        }
+        for item in order.items
+    ]
+    
+    breakdown_map = {
+        row["product_variant_id"]: row
+        for row in breakdown
+    }
 
     # ----------------------------
     # STEP 2: process combos
@@ -158,10 +205,10 @@ async def get_invoice(
             product_variant_id = c_item.product_variant_id
             required_qty = c_item.quantity
 
-            if product_variant_id not in items_map:
+            if product_variant_id not in breakdown_map:
                 continue
 
-            order_item = items_map[product_variant_id]
+            order_item = breakdown_map[product_variant_id]
 
             # find or create row
             row = next(
@@ -180,6 +227,16 @@ async def get_invoice(
                         "id": c_item.product_variant.id,
                         "sku": c_item.product_variant.sku,
                         "price": c_item.product_variant.price,
+                        "variant_options": [{
+                            "id": variant_option_value.id,
+                            "value": variant_option_value.value,
+                            "variant_option": {
+                                "id": variant_option_value.variant_option.id,
+                                "name": variant_option_value.variant_option.name,
+                                }
+                        }
+                            for variant_option_value in c_item.product_variant.variant_options
+                        ],
                         "product":{
                             "id":c_item.product_variant.product.id,
                             "name":c_item.product_variant.product.name
