@@ -26,6 +26,7 @@ class Career(Base):
     address = Column(Text, nullable=False)
 
     # Job details
+    type = Column(String(255), nullable=True)
     position = Column(String(255), nullable=True)
 
     # Additional information

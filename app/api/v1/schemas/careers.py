@@ -14,6 +14,7 @@ class CareerBase(BaseModel):
     email: EmailStr 
     phone: str 
     address: str 
+    type: Optional[str] = None
     position: Optional[str] = None
     cover_letter: Optional[str] = None
     resume: str 
