@@ -22,6 +22,7 @@ async def create_career(
         email = data.email, 
         phone = data.phone, 
         address = data.address, 
+        type = data.type or None,
         position = data.position or None,
         cover_letter  = data.cover_letter or None, 
         resume = data.resume,
