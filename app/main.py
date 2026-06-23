@@ -29,6 +29,7 @@ from app.api.v1.endpoints.demorequest import demo_request_router
 from app.api.v1.endpoints.dashboard.demorequest import admin_demo_request_router
 from app.api.v1.endpoints.dashboard.subscriptionplan import admin_subscription_plan, subscription_plan
 from app.api.v1.endpoints.contacts import contact_router
+from app.api.v1.endpoints.dashboard.careers import career_router, admin_career_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -75,6 +76,8 @@ app.include_router(admin_demo_request_router)
 app.include_router(admin_subscription_plan)
 app.include_router(subscription_plan)
 app.include_router(contact_router)
+app.include_router(career_router)
+app.include_router(admin_career_router)
 
 # =========================
 # CORS CONFIGURATION
