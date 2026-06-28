@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+import json
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import re
@@ -14,6 +16,8 @@ from app.utils.pagination import get_paginated_result
 
 admin_subscription_plan = APIRouter(prefix="/dashboard/subscription-plan", tags=['Admin SubscriptionPlan CRUD'])
 subscription_plan = APIRouter(prefix="/subscription-plan", tags=['SubscriptionPlan'])
+
+SUBSCRIPTION_ADDON_SELECTION_COOKIE_KEY = "subscription_selection"
 
 def create_slug(text: str) -> str:
     text = text.lower().strip()
@@ -32,7 +36,7 @@ async def create_service_nested(
 ):
 
     service = Service(
-        global_type=data.global_type,
+        global_type=data.global_type.lower(),
         badge=data.badge,
         title=data.title,
         sub_title=data.sub_title,
@@ -97,6 +101,7 @@ async def create_service_nested(
     response_model=PaginatedServiceResponse
 )
 async def list_services_nested(
+    global_type: Optional[str] = None,
     skip: int = Query(0, ge=0, description="Number of items to skip"),
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     db: AsyncSession = Depends(get_db)
@@ -110,17 +115,64 @@ async def list_services_nested(
             selectinload(Service.plans)
             .selectinload(SubscriptionPlan.addons)
         ).order_by(Service.created_at.desc())
+    
+    if global_type:
+        query = query.where(Service.global_type == global_type.lower())
 
     return await get_paginated_result(db, query, skip, limit)
 
+# @subscription_plan.get(
+#     "/nested/{service_id}",
+#     response_model=ServiceResponse
+# )
+# async def get_service(
+#     service_id: int,
+#     db: AsyncSession = Depends(get_db)
+# ):
+#     result = await db.execute(
+#         select(Service)
+#         .options(
+#             selectinload(Service.plans)
+#             .selectinload(SubscriptionPlan.prices),
+
+#             selectinload(Service.plans)
+#             .selectinload(SubscriptionPlan.addons)
+#         )
+#         .where(Service.id == service_id)
+#     )
+
+#     service = result.scalar_one_or_none()
+
+#     if not service:
+#         raise HTTPException(
+#             status_code=404,
+#             detail="Service not found"
+#         )
+
+#     return service
+
 @subscription_plan.get(
-    "/nested/{service_id}",
-    response_model=ServiceResponse
+    "/{global_type}",
+    response_model=ServiceResponse,
+    summary="Get subscription plans to show in user side by service global type",
 )
-async def get_service(
-    service_id: int,
+async def get_service_plans(
+    global_type: str,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
+    ## check if any addons are selected
+    cookie = request.cookies.get(
+        SUBSCRIPTION_ADDON_SELECTION_COOKIE_KEY
+    )
+    selection = None
+    if cookie:
+        try:
+            selection = json.loads(cookie)
+        except json.JSONDecodeError:
+            pass
+    
+    ## get serviceplans
     result = await db.execute(
         select(Service)
         .options(
@@ -130,7 +182,7 @@ async def get_service(
             selectinload(Service.plans)
             .selectinload(SubscriptionPlan.addons)
         )
-        .where(Service.id == service_id)
+        .where(Service.global_type == global_type)
     )
 
     service = result.scalar_one_or_none()
@@ -140,8 +192,32 @@ async def get_service(
             status_code=404,
             detail="Service not found"
         )
+        
+    service_data = ServiceResponse.model_validate(
+        service,
+        from_attributes=True
+    )
+    
+    if selection:
+        selected_service_id = selection.get("service_id")
+        selected_plan_id = selection.get("plan_id")
+        selected_addon_ids = selection.get("addon_ids", [])
 
-    return service
+        service_data.selected = (
+            service_data.id == selected_service_id
+        )
+
+        for plan in service_data.plans:
+            plan.selected = (
+                plan.id == selected_plan_id
+            )
+
+            for addon in plan.addons:
+                addon.selected = (
+                    addon.id in selected_addon_ids
+                )
+    
+    return service_data
 # =========================
 ## END OF NESTED CRUD
 # =========================

@@ -131,6 +131,8 @@ class SubscriptionPlanPriceResponse(BaseModel):
 
 class SubscriptionPlanAddonResponse(BaseModel):
     id: int
+    selected: bool = False
+    
     title: str
     description: Optional[str] = None
     price: Decimal
@@ -144,6 +146,7 @@ class SubscriptionPlanAddonResponse(BaseModel):
 
 class NestedSubscriptionPlanResponse(BaseModel):
     id: int
+    selected: bool = False
 
     name: str
     slug: str
@@ -176,6 +179,7 @@ class NestedSubscriptionPlanResponse(BaseModel):
 class ServiceResponse(BaseModel):
 
     id: int
+    selected: bool = False
 
     global_type: str
     badge: Optional[str] = None
@@ -221,3 +225,10 @@ class SubscriptionPlanAddonUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     price: Optional[Decimal] = None
+    
+
+## schemas to add addons in session
+class AddAddonRequest(BaseModel):
+    service_id: int
+    plan_id: int
+    addon_ids: List[int]
