@@ -309,11 +309,13 @@ async def create_plan(
         slug = create_slug(data.name),
         key = data.key,
         description = data.description or None if "description" in data else None, 
-        price = data.price,
-        billing_period = data.billing_period.lower() or None,
+        features = data.features,
         trial_days = data.trial_days, 
         is_popular = data.is_popular,
         is_active = data.is_active,
+        max_users = data.max_users,
+        max_locations = data.max_locations,
+        max_products = data.max_products,
         sort_order = data.sort_order,
         created_by = current_user.id
     )

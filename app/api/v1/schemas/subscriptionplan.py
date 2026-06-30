@@ -25,6 +25,8 @@ class SubscriptionPlanCreate(BaseModel):
 
 class SubscriptionPlanResponse(BaseModel):
     id: int
+    
+    service_id: int
 
     name: str
     slug: str
