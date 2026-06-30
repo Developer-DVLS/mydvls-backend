@@ -291,7 +291,20 @@ async def create_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only)
 ):
+    # service_id validation
+    service_result = await db.execute(
+        select(Service)
+        .where(Service.id == data.service_id)
+    )
+    service = service_result.scalars().first()
+    if not service:
+        raise HTTPException(
+            status_code= 404,
+            detail="Invalid service-id."
+        )
+        
     plan = SubscriptionPlan(
+        service_id = data.service_id,
         name = data.name, 
         slug = create_slug(data.name),
         key = data.key,

@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 class SubscriptionPlanCreate(BaseModel):
+    service_id: int
     name: str
     key: str
 

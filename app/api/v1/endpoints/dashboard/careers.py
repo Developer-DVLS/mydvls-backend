@@ -19,7 +19,7 @@ async def create_career(
 ):
     career = Career(
         full_name = data.full_name, 
-        email = data.email, 
+        email = data.email.lower(), 
         phone = data.phone, 
         address = data.address, 
         type = data.type or None,

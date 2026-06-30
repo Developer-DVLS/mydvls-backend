@@ -35,7 +35,7 @@ async def user_register(background_tasks: BackgroundTasks, data:UserRegisterRequ
     try:
         # Check if email already exists
         existing_user = await db.execute(
-        select(User).filter(User.email == data.email)
+        select(User).filter(User.email == data.email.lower())
         )
         existing_user = existing_user.scalars().first()
         if existing_user:

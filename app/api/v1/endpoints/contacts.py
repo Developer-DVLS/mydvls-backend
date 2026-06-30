@@ -17,7 +17,7 @@ async def create_contact(
     contact = Contact(
         first_name = data.first_name, 
         last_name = data.last_name or None,
-        email = data.email or None, 
+        email = data.email.lower() or None, 
         phone = data.phone, 
         message = data.message or None
     )

@@ -20,6 +20,7 @@ from app.models.demorequest import DemoRequest
 from app.models.subscriptionplan import SubscriptionPlan
 from app.models.contacts import Contact
 from app.models.careers import Career
+from app.models.business import Business, BusinessSubscription, BusinessSubscriptionAddon
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
