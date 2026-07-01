@@ -60,6 +60,9 @@ async def add_to_cart(
     user = Depends(get_current_user_optional)
 ):
     user_id = user.id if user else None
+    
+    # check for stock 
+    await cart_service.check_stock(db, product_variant_id,quantity)
 
     await cart_service.add(
         request=request,

@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, Boolean, Text, DateTime, Table, UniqueConstraint
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.core.database import Base
 
@@ -155,6 +156,10 @@ class ProductVariant(Base):
     @property
     def product_name(self):
         return self.product.name if self.product else None
+    
+    @hybrid_property
+    def in_stock(self):
+        return self.is_active and self.stock_quantity > 0
 
 class ProductAttribute(Base):
     """

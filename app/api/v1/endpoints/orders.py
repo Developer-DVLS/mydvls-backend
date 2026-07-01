@@ -67,6 +67,12 @@ async def create_order(
         #4. update cart status
         order.cart.status = CartStatus.ORDERED
         
+        #5. update inventory
+        for ordered_item in order.items:
+            product_variant = ordered_item.product_variant
+            #update
+            product_variant.stock_quantity -= ordered_item.quantity
+        
         await db.commit()
         await db.refresh(order) 
         

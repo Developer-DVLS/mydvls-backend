@@ -111,6 +111,7 @@ class ShopProductVariant(BaseModel):
     stock_quantity: int = 0
     is_active: bool = True
     is_featured: bool = False
+    in_stock: bool = False
     
     images: Optional[List[ShopImageMini]] = None
     attributes: Optional[List[ShopProductAttribute]] = None

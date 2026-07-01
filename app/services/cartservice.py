@@ -21,6 +21,67 @@ class CartService:
     REDIS_PREFIX = "cart:guest:"
     GUEST_CART_EXPIRY = 60 * 60 * 24 * 7  #7days
     
+    
+    # ======================================================
+    # Inventory
+    # ======================================================
+    async def check_stock(self, db, product_variant_id, requested_quantity: int):
+        """
+        Validate that the requested quantity is available.
+        """
+
+        if requested_quantity <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Quantity must be greater than zero."
+            )
+        
+        result = await db.execute(
+            select(ProductVariant)
+            .options(selectinload(ProductVariant.product))
+            .where(ProductVariant.id == product_variant_id)
+        )
+        product_variant = result.scalar_one_or_none()
+
+
+        if product_variant.stock_quantity <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{product_variant.product.name} is out of stock."
+            )
+
+        if requested_quantity > product_variant.stock_quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Only {product_variant.stock_quantity} item(s) available "
+                    f"for {product_variant.product.name}."
+                )
+            )
+    
+    def validate_cart_quantity(
+        self,
+        product_variant,
+        requested_quantity: int,
+        existing_quantity: int = 0
+    ):
+        total_quantity = existing_quantity + requested_quantity
+
+        if total_quantity > product_variant.stock_quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Only {product_variant.stock_quantity} item(s) available. "
+                    f"You already have {existing_quantity} in your cart."
+                )
+            )
+
+        return total_quantity
+    
+    # ======================================================
+    # CART
+    # ======================================================
+    
     # GET CART (UNIFIED)
     async def get_cart(
         self, 
@@ -60,7 +121,7 @@ class CartService:
         if user_id:
             return await self.update_db_cart_item(request, db, user_id, cart_product_id, quantity)
 
-        return await self.update_redis_cart(request, cart_product_id, quantity)
+        return await self.update_redis_cart(db, request, cart_product_id, quantity)
     
     # REMOVE ITEM
     async def remove(
@@ -212,6 +273,13 @@ class CartService:
 
         for item in items:
             if item["product_variant_id"] == product_variant_id:
+                # validate cart quantity/ stock check
+                self.validate_cart_quantity(
+                    variant, 
+                    requested_quantity = quantity, 
+                    existing_quantity = item["quantity"]
+                    )
+                
                 item["quantity"] += quantity
                 found = True
                 break
@@ -243,6 +311,7 @@ class CartService:
     #update redis cart item
     async def update_redis_cart(
         self, 
+        db,
         request: Request,
         cart_product_id: int, 
         quantity: int
@@ -254,8 +323,18 @@ class CartService:
         items = cart.get("cart_products", [])
 
         updated = False
+            
         
         for item in items:
+            # check stock
+            if quantity > item["quantity"]:
+                await self.check_stock(
+                    db,
+                    item["product_variant_id"],
+                    quantity
+                )
+            
+            ## update quantity
             if int(item.get("id")) == int(cart_product_id):
                 if quantity > item["quantity"]:
                     if "quantity_after_combo" in item:
@@ -464,6 +543,13 @@ class CartService:
             )
         item = result.scalars().first()
         if item:
+            # validate cart quantity/ stock check
+            self.validate_cart_quantity(
+                variant, 
+                requested_quantity = quantity, 
+                existing_quantity = item.quantity
+                )
+            
             item.quantity += quantity
         else:
             item = CartProduct(
@@ -520,6 +606,14 @@ class CartService:
                 )
             )
         item = result.scalars().first()
+        
+        # check stock
+        if quantity > item.quantity:
+            await self.check_stock(
+                db,
+                cart_product.product_variant_id,
+                quantity
+            )
         
         for cache_cart_item in cache_cart_items:
             if int(cache_cart_item.get("id")) == int(item.id):
