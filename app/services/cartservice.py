@@ -470,9 +470,15 @@ class CartService:
                 .selectinload(CartProduct.product_variant)
                 .selectinload(ProductVariant.product)
                 .selectinload(Product.category),
+                
                 selectinload(Cart.cart_products)
                 .selectinload(CartProduct.product_variant)
                 .selectinload(ProductVariant.images),
+                
+                selectinload(Cart.cart_products)
+                .selectinload(CartProduct.product_variant)
+                .selectinload(ProductVariant.variant_options)
+                .selectinload(VariantOptionValue.variant_option)
                 )
             .where(
                 Cart.user_id == user_id,
