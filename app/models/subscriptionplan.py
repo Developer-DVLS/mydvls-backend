@@ -146,11 +146,50 @@ class SubscriptionPlanAddon(Base):
     
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    price = Column(Numeric(10, 2), nullable=False)
     
     #relationship
     plan = relationship("SubscriptionPlan",back_populates="addons")
+    prices = relationship(
+        "SubscriptionPlanAddonPrice",
+        back_populates="addon",
+        cascade="all, delete-orphan"
+    )
     
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+    
+class SubscriptionPlanAddonPrice(Base):
+    __tablename__ = "subscription_plan_addon_prices"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "subscription_plan_addon_id",
+            "billing_period",
+            name="uq_addon_billing_period"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    subscription_plan_addon_id = Column(
+        Integer,
+        ForeignKey("subscription_plan_addons.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    billing_period = Column(String(50), nullable=False)  # monthly, yearly
+    price = Column(Numeric(10, 2), nullable=False)
+
+    addon = relationship(
+        "SubscriptionPlanAddon",
+        back_populates="prices"
+    )
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True),

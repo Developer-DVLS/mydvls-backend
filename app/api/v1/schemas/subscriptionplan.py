@@ -80,10 +80,16 @@ class SubscriptionPlanPriceCreate(BaseModel):
     billing_period: str
     price: Decimal
 
-class SubscriptionPlanAddonCreate(BaseModel):
+
+class SubscriptionPlanAddonPriceCreate(BaseModel):
+    billing_period: str
+    price: float
+
+class NestedSubscriptionPlanAddonCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    price: Decimal
+    
+    prices: List[SubscriptionPlanAddonPriceCreate]
     
 class NestedSubscriptionPlanCreate(BaseModel):
     name: str
@@ -104,7 +110,7 @@ class NestedSubscriptionPlanCreate(BaseModel):
     sort_order: int = 0
 
     prices: List[SubscriptionPlanPriceCreate]
-    addons: Optional[List[SubscriptionPlanAddonCreate]] = None
+    addons: Optional[List[NestedSubscriptionPlanAddonCreate]] = None
     
 class ServiceCreate(BaseModel):
     global_type: str
@@ -131,14 +137,20 @@ class SubscriptionPlanPriceResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class SubscriptionPlanAddonPriceResponse(BaseModel):
+    id: int
+    billing_period: str
+    price: float
+    created_at: datetime
+    updated_at: datetime
 
-class SubscriptionPlanAddonResponse(BaseModel):
+class NestedSubscriptionPlanAddonResponse(BaseModel):
     id: int
     selected: bool = False
     
     title: str
     description: Optional[str] = None
-    price: Decimal
+    prices: List[SubscriptionPlanAddonPriceResponse]
 
     created_at: datetime
     updated_at: datetime
@@ -170,7 +182,7 @@ class NestedSubscriptionPlanResponse(BaseModel):
     sort_order: int
 
     prices: List[SubscriptionPlanPriceResponse]
-    addons: List[SubscriptionPlanAddonResponse]
+    addons: List[NestedSubscriptionPlanAddonResponse]
 
     created_at: datetime
     updated_at: datetime
@@ -227,8 +239,34 @@ class SubscriptionPlanPriceUpdate(BaseModel):
 class SubscriptionPlanAddonUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    price: Optional[Decimal] = None
+
+class SubscriptionPlanAddonCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
     
+class SubscriptionPlanAddonResponse(BaseModel):
+    id: int
+    selected: bool = False
+    
+    title: str
+    description: Optional[str] = None
+
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+        
+
+## addon price schema
+class CreateSubscriptionPlanAddonPrice(BaseModel):
+    billing_period: str
+    price: float
+    
+class UpdateSubscriptionPlanAddonPrice(BaseModel):
+    billing_period: Optional[str] = None
+    price: Optional[float] = None
+
 
 ## schemas to add addons in session
 class AddAddonRequest(BaseModel):

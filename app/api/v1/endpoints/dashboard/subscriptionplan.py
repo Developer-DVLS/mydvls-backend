@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import re
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.subscriptionplan import PaginatedServiceResponse, PaginatedSubscriptionPlanResponse, ServiceCreate, ServiceResponse, ServiceUpdate, SubscriptionPlanAddonCreate, SubscriptionPlanAddonResponse, SubscriptionPlanAddonUpdate, SubscriptionPlanCreate, SubscriptionPlanPriceCreate, SubscriptionPlanPriceResponse, SubscriptionPlanPriceUpdate, SubscriptionPlanResponse, SubscriptionPlanUpdate
+from app.api.v1.schemas.subscriptionplan import CreateSubscriptionPlanAddonPrice, PaginatedServiceResponse, PaginatedSubscriptionPlanResponse, ServiceCreate, ServiceResponse, ServiceUpdate, SubscriptionPlanAddonCreate, SubscriptionPlanAddonPriceResponse, SubscriptionPlanAddonResponse, SubscriptionPlanAddonUpdate, SubscriptionPlanCreate, SubscriptionPlanPriceCreate, SubscriptionPlanPriceResponse, SubscriptionPlanPriceUpdate, SubscriptionPlanResponse, SubscriptionPlanUpdate, UpdateSubscriptionPlanAddonPrice
 from app.core.database import get_db
-from app.models.subscriptionplan import Service, SubscriptionPlan, SubscriptionPlanAddon, SubscriptionPlanPrice
+from app.models.subscriptionplan import Service, SubscriptionPlan, SubscriptionPlanAddon, SubscriptionPlanAddonPrice, SubscriptionPlanPrice
 from app.models.user import User
 from app.auth.permissions import staff_only
 from app.services.security import get_current_user
@@ -79,14 +79,22 @@ async def create_service_nested(
 
         if plan_data.addons:
             for addon_data in plan_data.addons:
-                db.add(
-                    SubscriptionPlanAddon(
+                subscription_plan_addon = SubscriptionPlanAddon(
                         subscription_plan_id=plan.id,
                         title=addon_data.title,
-                        description=addon_data.description,
-                        price=addon_data.price
+                        description=addon_data.description
                     )
-                )
+                db.add(subscription_plan_addon)
+                await db.flush()
+
+                for addon_price in addon_data.prices:
+                    db.add(
+                        SubscriptionPlanAddonPrice(
+                            subscription_plan_addon_id = subscription_plan_addon.id,
+                            billing_period = addon_price.billing_period,
+                            price = addon_price.price
+                        )
+                    )
 
     await db.commit()
     await db.refresh(service)
@@ -114,6 +122,7 @@ async def list_services_nested(
 
             selectinload(Service.plans)
             .selectinload(SubscriptionPlan.addons)
+            .selectinload(SubscriptionPlanAddon.prices)
         ).order_by(Service.created_at.desc())
     
     if global_type:
@@ -181,6 +190,7 @@ async def get_service_plans(
 
             selectinload(Service.plans)
             .selectinload(SubscriptionPlan.addons)
+            .selectinload(SubscriptionPlanAddon.prices)
         )
         .where(Service.global_type == global_type)
     )
@@ -701,4 +711,140 @@ async def delete_addon(
     return {
         "status": True,
         "message": "Addon deleted successfully."
+    }
+    
+# =========================
+## SUBSCRIPTION PLAN ADDON PRICE CRUD
+# =========================
+@admin_subscription_plan.post(
+    "/plans/addons/{addon_id}/price",
+    response_model=SubscriptionPlanAddonPriceResponse
+)
+async def create_addon_price(
+    addon_id: int,
+    data: CreateSubscriptionPlanAddonPrice,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(staff_only)
+):
+    result = await db.execute(
+        select(SubscriptionPlanAddon)
+        .where(
+            SubscriptionPlanAddon.id == addon_id,
+            )
+    )
+    plan_addon = result.scalars().first()
+    if not plan_addon:
+        raise HTTPException(
+            status_code=404,
+            detail="Plan Addon not found"
+        )
+
+    addon_price = SubscriptionPlanAddonPrice(
+        subscription_plan_addon_id=addon_id,
+        **data.model_dump()
+    )
+
+    db.add(addon_price)
+
+    await db.commit()
+    await db.refresh(addon_price)
+
+    return addon_price
+
+@subscription_plan.get(
+    "/plans/addons/{addon_id}/price",
+    response_model=list[SubscriptionPlanAddonPriceResponse]
+)
+async def list_prices_by_addons(
+    addon_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(SubscriptionPlanAddonPrice)
+        .where(
+            SubscriptionPlanAddonPrice.subscription_plan_addon_id== addon_id
+        )
+        .order_by(
+            SubscriptionPlanAddonPrice.created_at.asc()
+        )
+    )
+
+    return result.scalars().all()
+
+@subscription_plan.get(
+    "/addons/price/{addon_price_id}",
+    response_model=SubscriptionPlanAddonPriceResponse
+)
+async def get_addon_price(
+    addon_price_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(SubscriptionPlanAddonPrice)
+        .where(SubscriptionPlanAddonPrice.id == addon_price_id)
+    )
+    addon_price = result.scalars().first()
+
+    if not addon_price:
+        raise HTTPException(
+            status_code=404,
+            detail="Addon Price not found"
+        )
+
+    return addon_price
+
+@admin_subscription_plan.patch(
+    "/addons/price/{addon_price_id}",
+    response_model=SubscriptionPlanAddonPriceResponse
+)
+async def update_addon_price(
+    addon_price_id: int,
+    data: UpdateSubscriptionPlanAddonPrice,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(staff_only)
+):
+    result = await db.execute(
+        select(SubscriptionPlanAddonPrice)
+        .where(SubscriptionPlanAddonPrice.id == addon_price_id)
+    )
+    addon_price = result.scalars().first()
+    if not addon_price:
+        raise HTTPException(
+            status_code=404,
+            detail="Addon Price not found"
+        )
+
+    for field, value in data.model_dump(
+        exclude_unset=True
+    ).items():
+        setattr(addon_price, field, value)
+
+    await db.commit()
+    await db.refresh(addon_price)
+
+    return addon_price
+
+@admin_subscription_plan.delete("/addons/price/{addon_price_id}")
+async def delete_addon(
+    addon_price_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(staff_only)
+):
+    result = await db.execute(
+        select(SubscriptionPlanAddonPrice)
+        .where(SubscriptionPlanAddonPrice.id == addon_price_id)
+    )
+    addon_price = result.scalars().first()
+    if not addon_price:
+        raise HTTPException(
+            status_code=404,
+            detail="Addon Price not found"
+        )
+
+    await db.delete(addon_price)
+    await db.commit()
+
+    return {
+        "status": True,
+        "message": "Addon Price deleted successfully."
     }
