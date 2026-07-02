@@ -20,7 +20,7 @@ async def get_cart(
     response: Response,
     cart_count: Optional[bool] = False,
     coupon_code: Optional[str] = None,
-    remove_coupon: Optional[bool] = True,
+    remove_coupon: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
     user = Depends(get_current_user_optional)
 ):
@@ -45,7 +45,11 @@ async def get_cart(
         user_id=user_id,
         cart=cart,
         coupon_code=coupon_code,
-        remove_coupon=remove_coupon
+        remove_coupon=(remove_coupon 
+                       if remove_coupon is not None else
+                       await cart_service.get_coupon_applied_bool_from_cache(request)
+                       )
+
     )
 
     return enriched_cart    

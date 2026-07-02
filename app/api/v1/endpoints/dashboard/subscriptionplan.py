@@ -47,6 +47,18 @@ async def create_service_nested(
     await db.flush()
 
     for plan_data in data.plans:
+        
+        # check if key already exists
+        existing_plan_result = await db.execute(
+            select(SubscriptionPlan)
+            .where(SubscriptionPlan.key == plan_data.key)
+        ) 
+        existing_plan = existing_plan_result.scalars().first()
+        if existing_plan:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Subscriptionplan with key '{plan_data.key}' already exists."
+            )
 
         plan = SubscriptionPlan(
             service_id=service.id,
@@ -311,6 +323,18 @@ async def create_plan(
         raise HTTPException(
             status_code= 404,
             detail="Invalid service-id."
+        )
+        
+    # check if key already exists
+    existing_plan_result = await db.execute(
+        select(SubscriptionPlan)
+        .where(SubscriptionPlan.key == data.key)
+    ) 
+    existing_plan = existing_plan_result.scalars().first()
+    if existing_plan:
+        raise HTTPException(
+            status_code=400,
+            detail=f"SubscriptionPlan with key '{data.key}' already exists."
         )
         
     plan = SubscriptionPlan(

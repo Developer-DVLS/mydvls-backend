@@ -327,16 +327,16 @@ class CartService:
             
         
         for item in items:
-            # check stock
-            if quantity > item["quantity"]:
-                await self.check_stock(
-                    db,
-                    item["product_variant_id"],
-                    quantity
-                )
-            
             ## update quantity
             if int(item.get("id")) == int(cart_product_id):
+                # check stock
+                if quantity > item["quantity"]:
+                    await self.check_stock(
+                        db,
+                        item["product_variant_id"],
+                        quantity
+                    )
+                
                 if quantity > item["quantity"]:
                     if "quantity_after_combo" in item:
                         quantity_change = quantity - item["quantity_after_combo"]
@@ -1165,6 +1165,7 @@ class CartService:
 
             if not coupon_offer:
                 cart.coupon_id = None
+                cart.remove_coupon = True
                 cart.coupon_applied = True
                 cart.coupon_applicable = False
                 cart.coupon_message = "Invalid coupon code."
@@ -1294,6 +1295,17 @@ class CartService:
                 return cart['coupon_id']
             return 0
     
+    async def get_coupon_applied_bool_from_cache(self, request):
+        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+        if not redis_cache_key:
+            return
+        cart = await get_cache(redis_cache_key)
+        
+        if cart and 'remove_coupon' in cart and cart.get('remove_coupon'):            
+                return cart['remove_coupon']
+        
+        return None
+    
     async def add_applied_coupon(self, request, db, user_id, coupon, cart):
         # if user is logged in add coupon to cart
         if user_id:
@@ -1322,6 +1334,7 @@ class CartService:
             user_cart.coupon_id = coupon.id
             await db.commit()
             cart.coupon_id = coupon.id
+            cart.remove_coupon = False
             cart.coupon_applied = True
             cart.coupon_applicable = True
             cart.coupon_message = "Coupon applied"
@@ -1339,6 +1352,7 @@ class CartService:
                 return None
 
             cached_cart["coupon_id"] = coupon.id
+            cached_cart["remove_coupon"] = False
 
             await set_cache(
                 redis_cache_key,
@@ -1375,6 +1389,7 @@ class CartService:
             await db.commit()
 
             cart.coupon_id = None
+            cart.remove_coupon = True
             cart.coupon_applied = False
             cart.coupon_applicable = False
             cart.coupon_message = "No coupon applied."
@@ -1393,6 +1408,7 @@ class CartService:
                 return None
 
             cached_cart["coupon_id"] = None
+            cached_cart["remove_coupon"] = True
             
             await set_cache(redis_cache_key, 
                 cached_cart,

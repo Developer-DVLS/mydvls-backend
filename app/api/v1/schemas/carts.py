@@ -156,6 +156,7 @@ class CartResponse(BaseModel):
     id: int
     user_id: Optional[UUID] = None
     coupon_id: Optional[int] = None
+    remove_coupon: Optional[bool] = None
     status: CartStatus
     cart_products: Optional[List[CartProductResponse]] = None
     subtotal: Optional[float] = 0
