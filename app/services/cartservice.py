@@ -4,13 +4,14 @@ from decimal import Decimal
 import json
 import uuid
 from fastapi import HTTPException, Request, Response
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.schemas.carts import CartBOGOFreeItem, CartBOGOMeta, CartGetItem, CartGetItemProduct, CartOfferResponse, CartResponse, ProductVariantResponse
 from app.models.carts import Cart, CartProduct, CartStatus
 from app.models.offers import ComboDiscountType, ComboOffer, DiscountType, Offer, OfferType
+from app.models.orders import Order
 from app.models.products import Product, ProductCategory, ProductVariant, VariantOptionValue
 from app.models.tax import TaxConfig, TaxScope
 from app.services.offerservice import build_offer_indexes, get_all_active_offers, resolve_offer, valid_combo_offers
@@ -1208,6 +1209,35 @@ class CartService:
         # maximum discount amount validation
         if coupon_discount_amount > coupon_offer.max_discount_amount:
             coupon_discount_amount = coupon_offer.max_discount_amount
+        
+        # total usage limit check
+        total_coupon_used = await db.scalar(
+            select(func.count(Order.id)).where(
+                Order.coupon_id == coupon_offer.id,
+                Order.payment_status == "paid"
+            )
+        )
+        if total_coupon_used >= coupon_offer.usage_limit_total:
+            cart.coupon_applied = False
+            cart.coupon_applicable = False
+            cart.coupon_message = "Coupon usage limit reached."
+            
+            return cart
+
+        #per user usage limit check
+        user_coupon_used = await db.scalar(
+            select(func.count(Order.id)).where(
+                Order.coupon_id == coupon_offer.id,
+                Order.user_id == cart.user_id,
+                Order.payment_status == "paid"
+            )
+        )
+        if user_coupon_used >= coupon_offer.usage_limit_per_user:
+            cart.coupon_applied = False
+            cart.coupon_applicable = False
+            cart.coupon_message = "You have already used this coupon."
+            
+            return cart
         
         cart.coupon_applied = True
         cart.coupon_applicable = True

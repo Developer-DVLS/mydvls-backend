@@ -115,6 +115,7 @@ class OrderService:
         order = Order(
             user_id = user.id,
             cart_id = cart.id,
+            coupon_id = cart.coupon_id or None,
             order_number = str(uuid.uuid4()),
             subtotal = enriched_cart.subtotal,
             tax_amount = enriched_cart.tax_amount,

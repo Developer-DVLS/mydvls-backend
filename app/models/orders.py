@@ -38,6 +38,7 @@ class Order(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey(
         "users.id", ondelete="SET NULL"), nullable=False, index=True)
     cart_id = Column(Integer, ForeignKey("carts.id"), nullable=True, unique=True)
+    coupon_id = Column(Integer, ForeignKey("offers.id", ondelete="SET NULL"), nullable=True)
 
     # Order number (business-specific, human-readable)
     order_number = Column(String(50), nullable=True, unique=True, index=True)
@@ -93,6 +94,8 @@ class Order(Base):
     cart = relationship("Cart", back_populates="order")
     #applied combo offers
     applied_combos = relationship("AppliedCombo", back_populates="order")
+    #coupon relation
+    coupon = relationship("Offer")
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow,

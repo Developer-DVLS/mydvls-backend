@@ -151,7 +151,6 @@ async def register_business(
                         BusinessSubscriptionAddon(
                             business_subscription_id=subscription.id,
                             addon_id=addon_id,
-                            quantity=addon.quantity,
                             amount=plan_addon.price,
                             # calculate after payment is done
                             # starts_at=addon.starts_at,
