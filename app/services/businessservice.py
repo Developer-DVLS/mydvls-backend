@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.subscriptionplan import Service, SubscriptionPlan, SubscriptionPlanAddon, SubscriptionPlanPrice
+from app.models.subscriptionplan import Service, SubscriptionPlan, SubscriptionPlanAddon, SubscriptionPlanAddonPrice, SubscriptionPlanPrice
 
 class BusinessService:
 
@@ -75,7 +75,8 @@ class BusinessService:
     
     async def validate_plan_addon(
         self,
-        addon_id
+        addon_id,
+        billing_period
     ):
         plan_addon_result = await self.db.execute(
             select(SubscriptionPlanAddon)
@@ -87,6 +88,21 @@ class BusinessService:
                 status_code=404,
                 detail=f"PlanAddon {addon_id} not found."
             )
-        return plan_addon
+        
+        addon_price_result = await self.db.execute(
+            select(SubscriptionPlanAddonPrice)
+            .where(
+                SubscriptionPlanAddonPrice.subscription_plan_addon_id == addon_id,
+                SubscriptionPlanAddonPrice.billing_period == billing_period
+                )
+        )
+        addon_price = addon_price_result.scalars().first()
+        if not plan_addon:
+            raise HTTPException(
+                status_code=404,
+                detail=f"AddonPrice not found of billing period {billing_period}."
+            )
+        
+        return plan_addon, addon_price
         
         

@@ -145,13 +145,13 @@ async def register_business(
 
                 for addon_id in addon.addon_id:
 
-                    plan_addon = await business_service.validate_plan_addon(addon_id)
+                    plan_addon, addon_price = await business_service.validate_plan_addon(addon_id, subscription.billing_period)
 
                     db.add(
                         BusinessSubscriptionAddon(
                             business_subscription_id=subscription.id,
                             addon_id=addon_id,
-                            amount=plan_addon.price,
+                            amount=addon_price.price,
                             # calculate after payment is done
                             # starts_at=addon.starts_at,
                             # expires_at=addon.expires_at,
