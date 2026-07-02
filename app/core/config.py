@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     TRANSACTION_KEY: str = os.getenv('TRANSACTION_KEY', '')
     ENDPOINT_URL: str = os.getenv('ENDPOINT_URL', '')
     
+    ##teams alert 
+    TEAMS_ALERT_URL: str = os.getenv('TEAMS_ALERT_URL', '')
+    TEAMS_ALERT_SECRET: str = os.getenv('TEAMS_ALERT_SECRET', '')
+    
     @property
     def tz(self):
         """Return pytz timezone object"""

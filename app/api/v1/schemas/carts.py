@@ -9,6 +9,10 @@ from app.models.offers import DiscountType, OfferType
 class ProductCategoryResponse(BaseModel):
     id: int
     name: str
+    
+    class Config:
+        from_attributes = True
+        
 class ProductResponse(BaseModel):
     id: int
     name: str
@@ -29,15 +33,23 @@ class VariantImageResponse(BaseModel):
 class CartVariantOptionResponse(BaseModel):
     id: int
     name: str
+    
+    class Config:
+        from_attributes = True
 
 class CartVariantOptionValueResponse(BaseModel):
     id: int
     value: str
     variant_option: CartVariantOptionResponse
+    
+    class Config:
+        from_attributes = True
+        
 class ProductVariantResponse(BaseModel):
     id: int
     sku: str
     price: float
+    in_stock: bool = False
     product_id: int
     product: Optional[ProductResponse] = None
     # images: Optional[List[VariantImageResponse]] = None

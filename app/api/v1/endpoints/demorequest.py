@@ -9,6 +9,7 @@ from app.models.demorequest import DemoRequest
 from app.models.user import User
 from app.services.security import get_current_user_optional
 from app.core.database import get_db
+from app.utils.teams_alert import team_alert
 
 demo_request_router = APIRouter(prefix="/demo-request", tags=["User DemoRequest"])
 
@@ -36,6 +37,13 @@ async def create_demo_request(
     db.add(demo_request)
     await db.commit()
     await db.refresh(demo_request)
+    
+    #send team alert
+    await team_alert(
+        title="DEMO REQUEST ALERT -MYDVLS",
+        monitor="Demo request application in Mydvls. Review it ASAP.",
+        monitor_url="https://mydvls.chowchownow.com/"
+    )
     
     return {
         "status": True,

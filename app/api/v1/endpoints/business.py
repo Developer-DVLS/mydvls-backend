@@ -22,6 +22,7 @@ from app.core.database import get_db
 from app.services.businessservice import BusinessService
 from app.services.security import get_current_user
 from app.utils.pagination import get_paginated_result
+from app.utils.teams_alert import team_alert
 
 
 business_router = APIRouter(prefix="/businesses", tags=["Businesses"])
@@ -162,6 +163,13 @@ async def register_business(
     await db.commit()
 
     await db.refresh(business)
+    
+    #send team alert
+    # await team_alert(
+    #     title="NEW BUSINESS REGISTERED -MYDVLS",
+    #     monitor="New business have registered and subscribed for a plan. Review it ASAP and response to it.",
+    #     monitor_url="https://mydvls.chowchownow.com/"
+    # )
 
     return {
         "message": "Business registered successfully.",
@@ -175,7 +183,7 @@ async def add_business_subscription_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    subscription_data = payload.subscriptions
+    subscription_data = payload
 
     business_service = BusinessService(db=db)
     # validate service and plan
@@ -214,7 +222,6 @@ async def add_business_subscription_plan(
                     BusinessSubscriptionAddon(
                         business_subscription_id=subscription.id,
                         addon_id=addon_id,
-                        quantity=addon.quantity,
                         amount=plan_addon.price,
                         is_active=False,
                     )
@@ -223,6 +230,13 @@ async def add_business_subscription_plan(
     await db.commit()
     
     await db.refresh(subscription)
+    
+    #send team alert
+    # await team_alert(
+    #     title="EXISTING BUSINESS SUBSCRIBED FOR NEW PLAN -MYDVLS",
+    #     monitor="Existing business have subscribed for a plan. Review it ASAP and response to it.",
+    #     monitor_url="https://mydvls.chowchownow.com/"
+    # )
 
     return {
         "message": "subscription Plan registered successfully.",
