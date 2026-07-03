@@ -298,7 +298,7 @@ async def update_variant(
 
     return result.scalars().first()
 
-@admin_variant_router.delete('/{variant_id}')
+@admin_variant_router.delete('/{variant_id}/')
 async def delete_variant(
     variant_id: int,
     current_user: User = Depends(staff_only),
@@ -312,12 +312,12 @@ async def delete_variant(
     if not variant:
         raise HTTPException(status_code=404, detail="Variant not found")
 
-    await db.delete(variant)
+    variant.is_active = False
     await db.commit()
 
     return {
         "status": True,
-        "message": "Variant deleted successfully"
+        "message": "Variant inactivated."
     }
 
 # add product variant image

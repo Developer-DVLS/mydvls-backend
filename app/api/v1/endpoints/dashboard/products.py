@@ -182,7 +182,7 @@ async def update_product(
     return product
 
 
-@admin_product_router.delete('/{product_id}')
+@admin_product_router.delete('/{product_id}/')
 async def delete_product(
     product_id: int,
     current_user: User = Depends(staff_only),
@@ -196,12 +196,12 @@ async def delete_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    await db.delete(product)
+    product.is_active = False
     await db.commit()
 
     return {
         "status": True,
-        "message": "Product deleted successfully"
+        "message": "Product inactivated."
     }
     
 # nested api tp create product and its variant as once
