@@ -18,6 +18,7 @@ class ProductUpdate(BaseModel):
     category_id: Optional[int] = None
     name: Optional[str] = None
     description: Optional[str] = None
+    features: Optional[str] = None
     is_active: Optional[bool] = None
     is_featured: Optional[bool] = None
 
@@ -58,11 +59,14 @@ class ProductVariantNestedRequest(BaseModel):
     stock_quantity: int = 0
     is_active: bool = True
     is_featured: bool = False
+    features: Optional[str] = None
+    description: Optional[str] = None
 
 class ProductCreateRequest(BaseModel):
     category_id: int
     name: str
     description: Optional[str] = None
+    features: Optional[str] = None
     is_active: bool = False
     is_featured: bool = False
 

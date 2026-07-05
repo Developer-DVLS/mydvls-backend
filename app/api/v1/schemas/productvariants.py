@@ -12,6 +12,8 @@ class ProductVariantBase(BaseModel):
     stock_quantity: int = 0
     is_active: bool = True
     is_featured: bool = False
+    features: Optional[str] = None
+    description: Optional[str] = None
     
     @field_validator("sku")
     @classmethod
@@ -67,6 +69,8 @@ class ProductVariantUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_featured: Optional[bool] = None
     variant_option_value_ids: Optional[List[int]] = []
+    features: Optional[str] = None
+    description: Optional[str] = None
     
 # class ProductVariantResponse(ProductVariantBase):
 #     id: int

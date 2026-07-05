@@ -26,7 +26,7 @@ async def list_variants(
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(ProductVariant).options(
+    query = select(ProductVariant).join(Product).options(
         selectinload(ProductVariant.product),
         selectinload(ProductVariant.attributes),
         selectinload(ProductVariant.images),
@@ -68,7 +68,7 @@ async def list_variants_options(
     is_featured: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(ProductVariant).options(
+    query = select(ProductVariant).join(Product).options(
         selectinload(ProductVariant.product)
     ).where(
         ProductVariant.deleted_at.is_(None),
@@ -178,6 +178,8 @@ async def create_variant(
         stock_quantity=data.stock_quantity,
         is_active=data.is_active,
         is_featured=data.is_featured,
+        description=data.description or None if "description" in data else None,
+        features=data.features or None if "features" in data else None
     )
     
     ##assign variant-option

@@ -129,7 +129,7 @@ async def create_product(
         category_id=data.category_id,
         name=data.name,
         description=data.description,
-        features=data.features,
+        features=data.features or None if "features" in data else None,
         is_active=data.is_active,
         is_featured=data.is_featured,
     )
@@ -272,6 +272,7 @@ async def create_product_with_variants(
         category_id=data.category_id,
         name=data.name,
         description=data.description,
+        features=data.features or None if "features" in data else None,
         is_active=data.is_active,
         is_featured=data.is_featured,
     )
@@ -292,6 +293,8 @@ async def create_product_with_variants(
             stock_quantity=v.stock_quantity,
             is_active=v.is_active,
             is_featured=v.is_featured,
+            description=v.description or None if "description" in data else None,
+            features=v.features or None if "features" in data else None
         )
         db.add(variant)
         variant_objects.append(variant)
