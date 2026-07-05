@@ -214,6 +214,9 @@ async def delete_category(
                     if variant_option.values:
                         for value in variant_option.values:
                             value.deleted_at = datetime.utcnow()
+                            await db.commit()
+                    await db.commit()
+            await db.commit()
             # Variants
             if product.variants:
                 for variant in product.variants:
@@ -223,6 +226,8 @@ async def delete_category(
                     if variant.attributes:
                         for attribute in variant.attributes:
                             attribute.deleted_at = datetime.utcnow()
+                            await db.commit()
+                    await db.commit()
         
     # delete category
     category.deleted_at = datetime.utcnow()

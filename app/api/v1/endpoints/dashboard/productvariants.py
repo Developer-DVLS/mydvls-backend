@@ -33,7 +33,9 @@ async def list_variants(
         selectinload(ProductVariant.variant_options)
             .selectinload(VariantOptionValue.variant_option)
     ).where(
-        ProductVariant.deleted_at.is_(None)
+        ProductVariant.deleted_at.is_(None),
+        Product.deleted_at.is_(None),
+        ProductAttribute.deleted_at.is_(None),
         ).order_by(ProductVariant.created_at.desc())
     
     # search by SKU or product name
@@ -69,7 +71,8 @@ async def list_variants_options(
     query = select(ProductVariant).options(
         selectinload(ProductVariant.product)
     ).where(
-        ProductVariant.deleted_at.is_(None)
+        ProductVariant.deleted_at.is_(None),
+        Product.deleted_at.is_(None),
         ).order_by(ProductVariant.created_at.desc())
     
     # search by SKU or product name
@@ -338,6 +341,7 @@ async def delete_variant(
     if variant.attributes:
         for attribute in variant.attributes:
             attribute.deleted_at = datetime.utcnow()
+            await db.commit()
                             
     variant.deleted_at = datetime.utcnow()
     await db.commit()
