@@ -209,7 +209,27 @@ async def delete_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    product.deleted_at = datetime.now()
+    #delete relational tables
+    # Variant options
+    if product.variant_options:
+        for variant_option in product.variant_options:
+            variant_option.deleted_at = datetime.utcnow()
+            
+            # Variant option values
+            if variant_option.values:
+                for value in variant_option.values:
+                    value.deleted_at = datetime.utcnow()
+    # Variants
+    if product.variants:
+        for variant in product.variants:
+            variant.deleted_at = datetime.utcnow()
+
+            # Variant attributes
+            if variant.attributes:
+                for attribute in variant.attributes:
+                    attribute.deleted_at = datetime.utcnow()
+                    
+    product.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {
@@ -535,8 +555,12 @@ async def delete_variant_option(
             status_code=404, 
             detail="Variant Option not found"
         )
-    
-    option.deleted_at = datetime.now()
+    # Variant option values
+    if option.values:
+        for value in option.values:
+            value.deleted_at = datetime.utcnow()
+
+    option.deleted_at = datetime.utcnow()
     await db.commit()
     
     return {
@@ -704,7 +728,7 @@ async def delete_variant_option_values(
             detail="Variant Option not found"
         )
         
-    option_value.deleted_at = datetime.now()
+    option_value.deleted_at = datetime.utcnow()
     await db.commit()
     
     return {

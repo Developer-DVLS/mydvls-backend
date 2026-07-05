@@ -4,10 +4,11 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.v1.schemas.productcategories import CategoryRequest, CategoryResponse, CategoryUpdateRequest, PaginatedCategoryResponse, ProductCategoryDropdown
 from app.core.database import get_db
-from app.models.products import ProductCategory
+from app.models.products import Product, ProductCategory, ProductVariant, VariantOption
 from app.models.user import User
 from app.auth.permissions import staff_only
 from app.utils.pagination import get_paginated_result
@@ -179,7 +180,16 @@ async def delete_category(
 ):
     # fetch category
     result = await db.execute(
-        select(ProductCategory).where(ProductCategory.id == category_id)
+        select(ProductCategory)
+        .options(
+            selectinload(ProductCategory.products)
+            .selectinload(Product.variant_options)
+            .selectinload(VariantOption.values),
+            selectinload(ProductCategory.products)
+            .selectinload(Product.variants)
+            .selectinload(ProductVariant.attributes)
+        )
+        .where(ProductCategory.id == category_id)
     )
     category = result.scalars().first()
 
@@ -189,8 +199,33 @@ async def delete_category(
             detail="Category not found"
         )
 
+    #delete relations
+    if category.products:
+        # product
+        for product in category.products:
+            product.deleted_at = datetime.utcnow()
+
+            # Variant options
+            if product.variant_options:
+                for variant_option in product.variant_options:
+                    variant_option.deleted_at = datetime.utcnow()
+                    
+                    # Variant option values
+                    if variant_option.values:
+                        for value in variant_option.values:
+                            value.deleted_at = datetime.utcnow()
+            # Variants
+            if product.variants:
+                for variant in product.variants:
+                    variant.deleted_at = datetime.utcnow()
+
+                    # Variant attributes
+                    if variant.attributes:
+                        for attribute in variant.attributes:
+                            attribute.deleted_at = datetime.utcnow()
+        
     # delete category
-    category.deleted_at = datetime.now()
+    category.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {

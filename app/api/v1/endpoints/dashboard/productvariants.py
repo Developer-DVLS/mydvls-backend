@@ -334,7 +334,12 @@ async def delete_variant(
     if not variant:
         raise HTTPException(status_code=404, detail="Variant not found")
 
-    variant.deleted_at = datetime.now()
+    # Variant attributes
+    if variant.attributes:
+        for attribute in variant.attributes:
+            attribute.deleted_at = datetime.utcnow()
+                            
+    variant.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {
@@ -442,7 +447,7 @@ async def delete_attribute(
     if not attribute:
         raise HTTPException(status_code=404, detail="Product attribute not found")
 
-    attribute.deleted_at = datetime.now()
+    attribute.deleted_at = datetime.utcnow()
     await db.commit()
 
     return {
