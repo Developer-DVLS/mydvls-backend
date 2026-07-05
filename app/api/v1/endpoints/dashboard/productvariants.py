@@ -35,7 +35,7 @@ async def list_variants(
     ).where(
         ProductVariant.deleted_at.is_(None),
         Product.deleted_at.is_(None),
-        ProductAttribute.deleted_at.is_(None),
+        ProductVariant.deleted_at.is_(None),
         ).order_by(ProductVariant.created_at.desc())
     
     # search by SKU or product name
