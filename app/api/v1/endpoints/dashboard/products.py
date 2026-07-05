@@ -129,6 +129,7 @@ async def create_product(
         category_id=data.category_id,
         name=data.name,
         description=data.description,
+        features=data.features,
         is_active=data.is_active,
         is_featured=data.is_featured,
     )
@@ -202,7 +203,14 @@ async def delete_product(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Product).where(Product.id == product_id)
+        select(Product)
+        .options(
+            selectinload(Product.variant_options)
+            .selectinload(VariantOption.values),
+            selectinload(Product.variants)
+            .selectinload(ProductVariant.attributes)
+        )
+        .where(Product.id == product_id)
     )
     product = result.scalars().first()
 
@@ -551,6 +559,7 @@ async def delete_variant_option(
 ):
     result = await db.execute(
         select(VariantOption)
+        .options(selectinload(VariantOption.values))
         .where(VariantOption.id == variant_option_id)
     )
     option = result.scalars().first()

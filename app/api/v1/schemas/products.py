@@ -7,6 +7,7 @@ class ProductBase(BaseModel):
     category_id: int
     name: str
     description: Optional[str] = None
+    features: Optional[str] = None
     is_active: bool = False
     is_featured: bool = False
 

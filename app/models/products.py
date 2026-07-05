@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Numeric, String, ForeignKey, Boolean, Text, DateTime, Table, UniqueConstraint
+from sqlalchemy import Column, Index, Integer, Numeric, String, ForeignKey, Boolean, Text, DateTime, Table, UniqueConstraint, func, text
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -12,9 +12,9 @@ class ProductCategory(SoftDeleteMixin, Base):
     """
     
     __tablename__ = "product_categories"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    name = Column(String, index=True)
     description = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
     
@@ -28,6 +28,15 @@ class ProductCategory(SoftDeleteMixin, Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow, nullable=False)
+    
+    __table_args__ = (
+        Index(
+            "uq_product_categories_name_active",
+            func.lower(name),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 
 class Product(SoftDeleteMixin, Base):
     """ 
@@ -35,11 +44,13 @@ class Product(SoftDeleteMixin, Base):
     """
     
     __tablename__ = "products"
+
     
     id = Column(Integer, primary_key=True, index=True)
     category_id = Column(Integer, ForeignKey("product_categories.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String, nullable=False, index=True)
     description = Column(Text, nullable=True)
+    features = Column(Text, nullable=True)
     is_active = Column(Boolean, default=False)
     is_featured = Column(Boolean, default=False)
     
@@ -51,14 +62,24 @@ class Product(SoftDeleteMixin, Base):
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow, nullable=False)
 
+    __table_args__ = (
+        Index(
+            "uq_product_name_active",
+            func.lower(name),
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 class VariantOption(SoftDeleteMixin, Base):
     __tablename__ = "product_options"
     
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_product_option_active",
             "product_id",
             "name",
-            name="uq_product_option"
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
         ),
     )
 
@@ -98,10 +119,12 @@ class VariantOptionValue(SoftDeleteMixin, Base):
     __tablename__ = "variant_option_values"
     
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_option_value_active",
             "option_id",
             "value",
-            name="uq_option_value"
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
         ),
     )
 
@@ -132,13 +155,15 @@ class ProductVariant(SoftDeleteMixin, Base):
     
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), index=True)
-    sku = Column(String, unique=True, index=True)
+    sku = Column(String, index=True)
     price = Column(Numeric(10, 2), default=0.00, nullable=False)
     cost_price = Column(Numeric(10, 2), default=0.00, nullable=False)
     margin = Column(Numeric(10, 2), default=0.00, nullable=False)
     stock_quantity = Column(Integer, default=0)
     is_active = Column(Boolean, default=True, index=True)
     is_featured = Column(Boolean, default=False)
+    features = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
     
     # relationship
     product = relationship("Product", back_populates="variants")
@@ -153,6 +178,15 @@ class ProductVariant(SoftDeleteMixin, Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow, nullable=False)
+    
+    __table_args__ = (
+        Index(
+            "uq_products_sku_active",
+            "sku",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
     
     @property
     def product_name(self):
@@ -175,7 +209,7 @@ class ProductAttribute(SoftDeleteMixin, Base):
     id = Column(Integer, primary_key=True, index=True)
     variant_id = Column(Integer, ForeignKey("product_variants.id", ondelete="CASCADE"))
     key = Column(String) 
-    value = Column(String)
+    value = Column(Text)
     
     # relationship
     variant = relationship("ProductVariant", back_populates="attributes")
