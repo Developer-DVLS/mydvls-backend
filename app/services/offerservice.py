@@ -99,7 +99,10 @@ async def validate_target_exists(db, target, target_id=None):
 
     if target.target_type == TargetType.ITEM:
         result = await db.execute(
-            select(Product.id).where(Product.id == actual_target_id)
+            select(Product.id).where(
+                Product.id == actual_target_id,
+                Product.deleted_at.is_(None),
+                )
         )
         if not result.scalar_one_or_none():
             raise HTTPException(
@@ -109,7 +112,10 @@ async def validate_target_exists(db, target, target_id=None):
 
     elif target.target_type == TargetType.CATEGORY:
         result = await db.execute(
-            select(ProductCategory.id).where(ProductCategory.id == actual_target_id)
+            select(ProductCategory.id).where(
+                ProductCategory.id == actual_target_id,
+                ProductCategory.deleted_at.is_(None)
+                )
         )
         if not result.scalar_one_or_none():
             raise HTTPException(
@@ -285,7 +291,10 @@ async def get_active_offer_by_item(db, item_id: int):
     
     # 1. get item 
     item_result = await db.execute(
-        select(Product).where(Product.id == item_id)
+        select(Product).where(
+            Product.id == item_id,
+            Product.deleted_at.is_(None)
+            )
     )
 
     item = item_result.scalars().first()

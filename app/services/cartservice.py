@@ -40,7 +40,10 @@ class CartService:
         result = await db.execute(
             select(ProductVariant)
             .options(selectinload(ProductVariant.product))
-            .where(ProductVariant.id == product_variant_id)
+            .where(
+                ProductVariant.id == product_variant_id,
+                ProductVariant.deleted_at.is_(None)
+                )
         )
         product_variant = result.scalar_one_or_none()
 
@@ -239,7 +242,9 @@ class CartService:
             .where(
                 ProductVariant.id == product_variant_id,
                 ProductVariant.is_active == True,
-                Product.is_active == True
+                ProductVariant.deleted_at.is_(None),
+                Product.is_active == True,
+                Product.deleted_at.is_(None),
                 )
         )
         variant = result.scalars().first()
@@ -529,7 +534,9 @@ class CartService:
             .where(
                 ProductVariant.id == product_variant_id,
                 ProductVariant.is_active == True,
-                Product.is_active == True
+                ProductVariant.deleted_at.is_(None),
+                Product.is_active == True,
+                Product.deleted_at.is_(None),
                 )
         )
         variant = result.scalars().first()
@@ -961,7 +968,10 @@ class CartService:
                             .options(selectinload(ProductVariant.product).selectinload(Product.category),
                                     selectinload(ProductVariant.images)
                                     )
-                            .where(ProductVariant.id == cart_product_response.offer.bogo_meta.get_item_id)
+                            .where(
+                                ProductVariant.id == cart_product_response.offer.bogo_meta.get_item_id,
+                                ProductVariant.deleted_at.is_(None)
+                                )
                         )
                         get_item = get_item_result.scalars().first()
                         cart_product_response.offer.bogo_meta.get_item = CartGetItem(
@@ -1044,7 +1054,10 @@ class CartService:
                 selectinload(ProductVariant.variant_options)
                 .selectinload(VariantOptionValue.variant_option)
             )
-            .where(ProductVariant.id.in_(variant_ids))
+            .where(
+                ProductVariant.id.in_(variant_ids),
+                ProductVariant.deleted_at.is_(None)
+                )
         )
 
         variants = {v.id: v for v in result.scalars().all()}

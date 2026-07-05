@@ -4,8 +4,9 @@ from datetime import datetime
 from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.core.database import Base
+from app.models.mixins import SoftDeleteMixin
 
-class ProductCategory(Base):
+class ProductCategory(SoftDeleteMixin, Base):
     """ 
     Product Category Model
     """
@@ -28,7 +29,7 @@ class ProductCategory(Base):
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow, nullable=False)
 
-class Product(Base):
+class Product(SoftDeleteMixin, Base):
     """ 
     Product Model
     """
@@ -50,7 +51,7 @@ class Product(Base):
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow, nullable=False)
 
-class VariantOption(Base):
+class VariantOption(SoftDeleteMixin, Base):
     __tablename__ = "product_options"
     
     __table_args__ = (
@@ -93,7 +94,7 @@ product_variant_options_value = Table(
     Column("variant_option_value_id", Integer, ForeignKey("variant_option_values.id"), primary_key=True),
 )
 
-class VariantOptionValue(Base):
+class VariantOptionValue(SoftDeleteMixin, Base):
     __tablename__ = "variant_option_values"
     
     __table_args__ = (
@@ -122,7 +123,7 @@ class VariantOptionValue(Base):
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow, nullable=False)
 
-class ProductVariant(Base):
+class ProductVariant(SoftDeleteMixin, Base):
     """ 
     Product Variation Model
     """
@@ -161,7 +162,7 @@ class ProductVariant(Base):
     def in_stock(self):
         return self.is_active and self.stock_quantity > 0
 
-class ProductAttribute(Base):
+class ProductAttribute(SoftDeleteMixin, Base):
     """
     Product Attribute Model
     
@@ -183,7 +184,7 @@ class ProductAttribute(Base):
     updated_at = Column(DateTime, default=datetime.utcnow,
                         onupdate=datetime.utcnow, nullable=False)
 
-class ProductVariantImage(Base):
+class ProductVariantImage(SoftDeleteMixin, Base):
     """ 
     Product Variation Image Model
     

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, or_
@@ -31,7 +32,9 @@ async def list_variants(
         selectinload(ProductVariant.images),
         selectinload(ProductVariant.variant_options)
             .selectinload(VariantOptionValue.variant_option)
-    ).order_by(ProductVariant.created_at.desc())
+    ).where(
+        ProductVariant.deleted_at.is_(None)
+        ).order_by(ProductVariant.created_at.desc())
     
     # search by SKU or product name
     if search:
@@ -65,7 +68,9 @@ async def list_variants_options(
 ):
     query = select(ProductVariant).options(
         selectinload(ProductVariant.product)
-    ).order_by(ProductVariant.created_at.desc())
+    ).where(
+        ProductVariant.deleted_at.is_(None)
+        ).order_by(ProductVariant.created_at.desc())
     
     # search by SKU or product name
     if search:
@@ -104,7 +109,10 @@ async def get_variant(
             selectinload(ProductVariant.variant_options)
             .selectinload(VariantOptionValue.variant_option)
         )
-        .where(ProductVariant.id == variant_id)
+        .where(
+            ProductVariant.id == variant_id,
+            ProductVariant.deleted_at.is_(None)
+            )
     )
 
     variant = result.scalars().first()
@@ -122,7 +130,9 @@ async def create_variant(
 ):
     # check product exists
     result = await db.execute(
-        select(Product).where(Product.id == data.product_id)
+        select(Product).where(
+            Product.id == data.product_id,
+            Product.deleted_at.is_(None))
     )
     product = result.scalars().first()
 
@@ -131,7 +141,10 @@ async def create_variant(
     
     # check if sku already exists
     sku_exists_result = await db.execute(
-        select(ProductVariant).where(ProductVariant.sku == data.sku.lower())
+        select(ProductVariant).where(
+            ProductVariant.sku == data.sku.lower(),
+            ProductVariant.deleted_at.is_(None)
+            )
     )
     sku_exists = sku_exists_result.scalars().first()
     
@@ -145,6 +158,7 @@ async def create_variant(
 
         result = await db.execute(
             select(VariantOptionValue).where(
+                VariantOptionValue.deleted_at.is_(None),
                 VariantOptionValue.id.in_(ids)
             )
         )
@@ -224,7 +238,10 @@ async def update_variant(
         .options(
             selectinload(ProductVariant.variant_options)
         )
-        .where(ProductVariant.id == variant_id)
+        .where(
+            ProductVariant.id == variant_id,
+            ProductVariant.deleted_at.is_(None)
+            )
     )
     variant = result.scalars().first()
 
@@ -236,7 +253,10 @@ async def update_variant(
     # validate product only if provided
     if "product_id" in update_data:
         product_result = await db.execute(
-            select(Product).where(Product.id == update_data["product_id"])
+            select(Product).where(
+                Product.id == update_data["product_id"],
+                Product.deleted_at.is_(None)
+                )
         )
         if not product_result.scalars().first():
             raise HTTPException(status_code=404, detail="Product not found")
@@ -246,7 +266,8 @@ async def update_variant(
         existing = await db.execute(
             select(ProductVariant).where(
                 ProductVariant.sku == update_data["sku"],
-                ProductVariant.id != variant_id
+                ProductVariant.id != variant_id,
+                ProductVariant.deleted_at.is_(None)
             )
         )
         if existing.scalars().first():
@@ -264,6 +285,7 @@ async def update_variant(
 
         result = await db.execute(
             select(VariantOptionValue).where(
+                VariantOptionValue.deleted_at.is_(None),
                 VariantOptionValue.id.in_(ids)
             )
         )
@@ -312,12 +334,12 @@ async def delete_variant(
     if not variant:
         raise HTTPException(status_code=404, detail="Variant not found")
 
-    variant.is_active = False
+    variant.deleted_at = datetime.now()
     await db.commit()
 
     return {
         "status": True,
-        "message": "Variant inactivated."
+        "message": "Variant deleted."
     }
 
 # add product variant image
@@ -420,7 +442,7 @@ async def delete_attribute(
     if not attribute:
         raise HTTPException(status_code=404, detail="Product attribute not found")
 
-    await db.delete(attribute)
+    attribute.deleted_at = datetime.now()
     await db.commit()
 
     return {

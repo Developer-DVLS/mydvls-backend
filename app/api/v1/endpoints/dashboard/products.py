@@ -28,7 +28,9 @@ async def list_products(
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Product).order_by(Product.created_at.desc())
+    query = select(Product).where(
+        Product.deleted_at.is_(None)
+        ).order_by(Product.created_at.desc())
 
     if search:
         query = query.where(Product.name.ilike(f"%{search}%"))
@@ -59,7 +61,9 @@ async def list_product_options(
     is_featured: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Product).order_by(Product.created_at.desc())
+    query = select(Product).where(
+        Product.deleted_at.is_(None)
+        ).order_by(Product.created_at.desc())
 
     if search:
         query = query.where(Product.name.ilike(f"%{search}%"))
@@ -90,7 +94,9 @@ async def get_product(
     result = await db.execute(
         select(Product)
         .options(selectinload(Product.category))
-        .where(Product.id == product_id)
+        .where(Product.id == product_id,
+               Product.deleted_at.is_(None)
+               )
     )
     product = result.scalars().first()
 
@@ -108,7 +114,11 @@ async def create_product(
 ):
     # optional: check category exists
     category_result = await db.execute(
-        select(ProductCategory).where(ProductCategory.id == data.category_id)
+        select(ProductCategory)
+        .where(
+            ProductCategory.id == data.category_id,
+            ProductCategory.deleted_at.is_(None)
+            )
     )
     category = category_result.scalars().first()
 
@@ -145,7 +155,10 @@ async def update_product(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Product).where(Product.id == product_id)
+        select(Product).where(
+            Product.id == product_id,
+            Product.deleted_at.is_(None)
+            )
     )
     product = result.scalars().first()
 
@@ -196,12 +209,12 @@ async def delete_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    product.is_active = False
+    product.deleted_at = datetime.now()
     await db.commit()
 
     return {
         "status": True,
-        "message": "Product inactivated."
+        "message": "Product deleted."
     }
     
 # nested api tp create product and its variant as once
@@ -213,7 +226,10 @@ async def create_product_with_variants(
 ):
     # 1. validate category
     category = await db.execute(
-        select(ProductCategory).where(ProductCategory.id == data.category_id)
+        select(ProductCategory).where(
+            ProductCategory.id == data.category_id,
+            ProductCategory.deleted_at.is_(None)
+            )
     )
     if not category.scalars().first():
         raise HTTPException(status_code=404, detail="Category not found")
@@ -269,7 +285,10 @@ async def create_product_with_variant_options(
     try:
         # optional: check category exists
         category_result = await db.execute(
-            select(ProductCategory).where(ProductCategory.id == data.category_id)
+            select(ProductCategory).where(
+                ProductCategory.id == data.category_id,
+                ProductCategory.deleted_at.is_(None)
+                )
         )
         category = category_result.scalars().first()
 
@@ -347,7 +366,9 @@ async def list_variant_options(
     product_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(VariantOption).order_by(VariantOption.created_at.desc())
+    query = select(VariantOption).where(
+        VariantOption.deleted_at.is_(None)
+        ).order_by(VariantOption.created_at.desc())
         
     if product_id:
         query = query.where(
@@ -363,7 +384,9 @@ async def variant_options_dropdown(
     product_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(VariantOption).order_by(VariantOption.created_at.desc())
+    query = select(VariantOption).where(
+        VariantOption.deleted_at.is_(None)
+        ).order_by(VariantOption.created_at.desc())
         
     if product_id:
         query = query.where(
@@ -381,7 +404,10 @@ async def get_variant_option(
 ):
     result = await db.execute(
         select(VariantOption)
-        .where(VariantOption.id == variant_option_id)
+        .where(
+            VariantOption.id == variant_option_id,
+            VariantOption.deleted_at.is_(None)
+            )
     )
     option = result.scalars().first()
     
@@ -404,6 +430,7 @@ async def create_variant_option(
     if data.name:
         existing_option = await db.execute(
             select(VariantOption).where(
+                VariantOption.deleted_at.is_(None),
                 VariantOption.product_id == data.product_id,
                 VariantOption.name == data.name
             )
@@ -441,7 +468,10 @@ async def update_variant_option(
 ):
     result = await db.execute(
         select(VariantOption)
-        .where(VariantOption.id == variant_option_id)
+        .where(
+            VariantOption.id == variant_option_id,
+            VariantOption.deleted_at.is_(None)
+            )
     )
     option = result.scalars().first()
     
@@ -457,6 +487,7 @@ async def update_variant_option(
     if data.name:
         existing_option = await db.execute(
             select(VariantOption).where(
+                VariantOption.deleted_at.is_(None),
                 VariantOption.product_id == option.product_id,
                 VariantOption.name == data.name,
                 VariantOption.id != variant_option_id
@@ -505,7 +536,7 @@ async def delete_variant_option(
             detail="Variant Option not found"
         )
     
-    await db.delete(option)
+    option.deleted_at = datetime.now()
     await db.commit()
     
     return {
@@ -521,7 +552,9 @@ async def list_variant_option_values(
     option_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    query =  select(VariantOptionValue).order_by(VariantOptionValue.created_at.desc())
+    query =  select(VariantOptionValue).where(
+        VariantOptionValue.deleted_at.is_(None)
+        ).order_by(VariantOptionValue.created_at.desc())
     
     if option_id:
         query = query.where(
@@ -539,7 +572,10 @@ async def get_variant_option_value(
 ):
     result = await db.execute(
         select(VariantOptionValue)
-        .where(VariantOptionValue.id == variant_option_value_id)
+        .where(
+            VariantOptionValue.id == variant_option_value_id,
+            VariantOptionValue.deleted_at.is_(None)
+            )
     )
     option_value = result.scalars().first()
     
@@ -562,6 +598,7 @@ async def create_variant_option_value(
     if data.value:
         existing_option_value = await db.execute(
             select(VariantOptionValue).where(
+                VariantOptionValue.deleted_at.is_(None),
                 VariantOptionValue.option_id == data.option_id,
                 VariantOptionValue.value == data.value
             )
@@ -599,7 +636,10 @@ async def update_variant_option_values(
 ):
     result = await db.execute(
         select(VariantOptionValue)
-        .where(VariantOptionValue.id == variant_option_value_id)
+        .where(
+            VariantOptionValue.id == variant_option_value_id,
+            VariantOptionValue.deleted_at.is_(None)
+            )
     )
     option_value = result.scalars().first()
     
@@ -615,6 +655,7 @@ async def update_variant_option_values(
     if data.value:
         existing_value = await db.execute(
             select(VariantOptionValue).where(
+                VariantOptionValue.deleted_at.is_(None),
                 VariantOptionValue.option_id == option_value.option_id,
                 VariantOptionValue.value == data.value,
                 VariantOptionValue.id != variant_option_value_id
@@ -663,7 +704,7 @@ async def delete_variant_option_values(
             detail="Variant Option not found"
         )
         
-    await db.delete(option_value)
+    option_value.deleted_at = datetime.now()
     await db.commit()
     
     return {

@@ -123,6 +123,7 @@ async def shop_products_list(
         query = select(Product).options(
                 selectinload(Product.variants)
             ).where(
+                Product.deleted_at.is_(None),
                 Product.is_active == True,
                 Product.variants.any(ProductVariant.is_active == True)
             ).order_by(
@@ -256,7 +257,8 @@ async def product_detail(
         .where(
             Product.id == product_id,
             Product.is_active == True,
-            Product.variants.any(ProductVariant.is_active == True)
+            Product.variants.any(ProductVariant.is_active == True),
+            Product.deleted_at.is_(None),
         )
     )
     
@@ -296,7 +298,10 @@ async def product_detail(
                     get_item_result = await db.execute(
                         select(ProductVariant)
                         .options(selectinload(ProductVariant.product))
-                        .where(ProductVariant.id == best_offer.bogo_meta.get_item_id)
+                        .where(
+                            ProductVariant.id == best_offer.bogo_meta.get_item_id,
+                            ProductVariant.deleted_at.is_(None)
+                            )
                     )
                     get_item = get_item_result.scalars().first()
                     
@@ -347,6 +352,7 @@ async def list_combo_offer(
             ComboOffer.is_active == True,
             ComboOffer.start_date <= now,
             ComboOffer.end_date >= now,
+            ComboOffer.deleted_at.is_(None),
         )
         .order_by(ComboOffer.priority)
     )
@@ -378,6 +384,7 @@ async def list_combo_offer(
             ComboOffer.is_active == True,
             ComboOffer.start_date <= now,
             ComboOffer.end_date >= now,
+            ComboOffer.deleted_at.is_(None),
         )
         .order_by(ComboOffer.priority)
     )

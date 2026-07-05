@@ -25,7 +25,9 @@ async def list_category(
     limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(ProductCategory).order_by(ProductCategory.ordering.asc())
+    query = select(ProductCategory).where(
+        ProductCategory.deleted_at.is_(None)
+        ).order_by(ProductCategory.ordering.asc())
     
     if search:
         query = query.where(
@@ -48,7 +50,9 @@ async def list_category_options(
     is_featured: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(ProductCategory).order_by(ProductCategory.ordering.asc())
+    query = select(ProductCategory).where(
+        ProductCategory.deleted_at.is_(None)
+        ).order_by(ProductCategory.ordering.asc())
     
     if search:
         query = query.where(
@@ -71,7 +75,11 @@ async def get_category(
     current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ):        
-    result = await db.execute(select(ProductCategory))
+    result = await db.execute(
+        select(ProductCategory).where(
+            ProductCategory.deleted_at.is_(None)
+            )
+        )
     category = result.scalar_one_or_none()
     if not category:
         raise HTTPException(status_code=404, detail="Product category not found")
@@ -86,7 +94,10 @@ async def create_category(
 ):
     # check if category already exists (optional but recommended)
     result = await db.execute(
-        select(ProductCategory).where(func.lower(ProductCategory.name) == data.name.lower())
+        select(ProductCategory).where(
+            func.lower(ProductCategory.name) == data.name.lower(),
+            ProductCategory.deleted_at.is_(None)
+            )
     )
     existing_category = result.scalars().first()
 
@@ -122,7 +133,10 @@ async def update_category(
 ):
     # fetch category
     result = await db.execute(
-        select(ProductCategory).where(ProductCategory.id == category_id)
+        select(ProductCategory).where(
+            ProductCategory.id == category_id,
+            ProductCategory.deleted_at.is_(None)
+            )
     )
     category = result.scalars().first()
 
@@ -138,7 +152,8 @@ async def update_category(
     if "name" in update_data and update_data["name"] != category.name:
         existing = await db.execute(
             select(ProductCategory).where(
-                ProductCategory.name == update_data["name"]
+                ProductCategory.name == update_data["name"],
+                ProductCategory.deleted_at.is_(None)
             )
         )
         if existing.scalars().first():
@@ -175,7 +190,7 @@ async def delete_category(
         )
 
     # delete category
-    await db.delete(category)
+    category.deleted_at = datetime.now()
     await db.commit()
 
     return {
