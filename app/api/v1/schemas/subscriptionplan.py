@@ -22,6 +22,7 @@ class SubscriptionPlanCreate(BaseModel):
     max_products: Optional[int] = None
 
     sort_order: int = 0
+    is_normal: Optional[bool] = None
 
 class SubscriptionPlanResponse(BaseModel):
     id: int
@@ -40,11 +41,13 @@ class SubscriptionPlanResponse(BaseModel):
     is_popular: bool
     is_active: bool
 
-    max_users: Optional[int]
-    max_locations: Optional[int]
-    max_products: Optional[int]
+    max_users: Optional[int] = None
+    max_locations: Optional[int] = None
+    max_products: Optional[int] = None
 
     sort_order: int
+    
+    is_normal: Optional[bool] = None
 
     created_at: datetime
     updated_at: datetime
@@ -74,6 +77,7 @@ class SubscriptionPlanUpdate(BaseModel):
     is_popular: Optional[bool] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
+    is_normal: Optional[bool] = None
     
 
 class SubscriptionPlanPriceCreate(BaseModel):
@@ -108,7 +112,8 @@ class NestedSubscriptionPlanCreate(BaseModel):
     max_products: Optional[int] = None
 
     sort_order: int = 0
-
+    is_normal: Optional[bool] = None
+    
     prices: List[SubscriptionPlanPriceCreate]
     addons: Optional[List[NestedSubscriptionPlanAddonCreate]] = None
     
@@ -175,11 +180,13 @@ class NestedSubscriptionPlanResponse(BaseModel):
     is_popular: bool
     is_active: bool
 
-    max_users: Optional[int]
-    max_locations: Optional[int]
-    max_products: Optional[int]
+    max_users: Optional[int]= None
+    max_locations: Optional[int]= None
+    max_products: Optional[int]= None
 
     sort_order: int
+    
+    is_normal: Optional[bool] = None
 
     prices: List[SubscriptionPlanPriceResponse]
     addons: List[NestedSubscriptionPlanAddonResponse]

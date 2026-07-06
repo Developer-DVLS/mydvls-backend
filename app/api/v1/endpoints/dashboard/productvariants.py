@@ -332,7 +332,9 @@ async def delete_variant(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(ProductVariant).where(ProductVariant.id == variant_id)
+        select(ProductVariant)
+        .options(selectinload(ProductVariant.attributes))
+        .where(ProductVariant.id == variant_id)
     )
     variant = result.scalars().first()
 

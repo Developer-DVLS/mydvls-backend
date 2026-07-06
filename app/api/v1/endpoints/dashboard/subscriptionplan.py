@@ -74,7 +74,8 @@ async def create_service_nested(
             max_locations=plan_data.max_locations,
             max_products=plan_data.max_products,
             sort_order=plan_data.sort_order,
-            created_by=current_user.id
+            created_by=current_user.id,
+            is_normal=plan_data.is_normal if 'is_normal' in plan_data else None
         )
 
         db.add(plan)
@@ -351,7 +352,8 @@ async def create_plan(
         max_locations = data.max_locations,
         max_products = data.max_products,
         sort_order = data.sort_order,
-        created_by = current_user.id
+        created_by = current_user.id,
+        is_normal = data.is_normal if "is_normal" in data else None
     )
     db.add(plan)
     await db.commit()

@@ -112,6 +112,8 @@ class ShopProductVariant(BaseModel):
     is_active: bool = True
     is_featured: bool = False
     in_stock: bool = False
+    features: Optional[str] = None
+    description: Optional[str] = None
     
     images: Optional[List[ShopImageMini]] = None
     attributes: Optional[List[ShopProductAttribute]] = None
@@ -142,6 +144,7 @@ class ShopProductDetailResponse(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    features: Optional[str] = None
     category: ShopCategoryResponse
     variant_options: Optional[List[ShopDetailVariantOptionMini]] = None
     variants: Optional[List[ShopProductVariant]] = None

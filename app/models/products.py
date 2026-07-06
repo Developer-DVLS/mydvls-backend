@@ -155,7 +155,7 @@ class ProductVariant(SoftDeleteMixin, Base):
     
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), index=True)
-    sku = Column(String, index=True)
+    sku = Column(Text, index=True)
     price = Column(Numeric(10, 2), default=0.00, nullable=False)
     cost_price = Column(Numeric(10, 2), default=0.00, nullable=False)
     margin = Column(Numeric(10, 2), default=0.00, nullable=False)

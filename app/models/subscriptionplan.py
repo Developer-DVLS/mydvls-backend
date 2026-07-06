@@ -81,6 +81,8 @@ class SubscriptionPlan(Base):
     # Sorting
     sort_order = Column(Integer, default=0)
     
+    is_normal = Column(Boolean, default=False, nullable=True)
+    
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     
     #relationship
