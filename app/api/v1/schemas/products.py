@@ -116,6 +116,7 @@ class CreateNestedProductWithVariantOption(BaseModel):
     description: Optional[str] = None
     is_active: bool = False
     is_featured: bool = False
+    features: Optional[str] = None
 
     variant_options: Optional[List[VariantOptionNestedRequest]] = None
     

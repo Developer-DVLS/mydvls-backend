@@ -335,8 +335,9 @@ async def create_product_with_variant_options(
             category_id=data.category_id,
             name=data.name,
             description=data.description,
+            features=data.features,
             is_active=data.is_active,
-            is_featured=data.is_featured,
+            is_featured=data.is_featured
         )
 
         db.add(new_product)
