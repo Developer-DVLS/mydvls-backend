@@ -143,10 +143,22 @@ class PaginatedBusinessSubscriptionResponse(BaseModel):
     limit: int
     data: Optional[List[BusinessSubscriptionResponse]] = None  
     
+
+class SubscriptionPlanAddonResponse(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+        
 class BusinessSubscriptionAddonResponse(BaseModel):
     id: int
     business_subscription_id: UUID
     addon_id: int
+    addon: SubscriptionPlanAddonResponse
     amount: float
     starts_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None

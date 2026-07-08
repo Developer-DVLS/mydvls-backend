@@ -1,9 +1,10 @@
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.models.business import (
@@ -299,10 +300,18 @@ async def create_business_subscription_addon(
     db.add(business_subscription_addon)
     await db.commit()
     await db.refresh(business_subscription_addon)
+    
+    result = await db.execute(
+        select(BusinessSubscriptionAddon)
+        .options(selectinload(BusinessSubscriptionAddon.addon))
+        .where(BusinessSubscriptionAddon.id == business_subscription_addon.id)
+    )
+    business_subscription_addon = result.scalars().first()
 
     return business_subscription_addon
 
-@admin_business_router.get("/business-subscription-addon/", response_model=PaginatedBusinessSubscriptionAddonResponse)
+@admin_business_router.get("/business-subscription-addon/", 
+                           response_model=PaginatedBusinessSubscriptionAddonResponse | List[BusinessSubscriptionAddonResponse])
 async def list_business_subscription_addon(
     business_subscription_id: Optional[UUID] = None,
     is_active: Optional[bool] = None,
@@ -311,28 +320,37 @@ async def list_business_subscription_addon(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only),
 ):
-    query = select(BusinessSubscriptionAddon).order_by(BusinessSubscriptionAddon.created_at.desc())
+    query = select(BusinessSubscriptionAddon).options(
+        selectinload(BusinessSubscriptionAddon.addon)
+        ).order_by(BusinessSubscriptionAddon.created_at.desc())
     
-    if business_subscription_id:
-        query = query.where(
-            BusinessSubscriptionAddon.business_subscription_id == business_subscription_id
-        )
     if is_active is not None:
         query = query.where(
             BusinessSubscriptionAddon.is_active == is_active
         )
+        
+    if business_subscription_id:
+        query = query.where(
+            BusinessSubscriptionAddon.business_subscription_id == business_subscription_id
+        )
+        business_subscription_addon_result = await db.execute(query)
+        business_subscription_addon = business_subscription_addon_result.scalars().all()
+
+        return business_subscription_addon
+
         
     return await get_paginated_result(db, query, skip, limit)
 
 @admin_business_router.get("/business-subscription-addon/{business_subscription_addon_id}/", 
                            response_model=BusinessSubscriptionAddonResponse)
 async def get_business_subscription_addon(
-    business_subscription_addon_id: UUID,
+    business_subscription_addon_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only),
 ):
     result = await db.execute(
         select(BusinessSubscriptionAddon)
+        .options(selectinload(BusinessSubscriptionAddon.addon))
         .where(BusinessSubscriptionAddon.id == business_subscription_addon_id)
         .order_by(BusinessSubscriptionAddon.created_at.desc())
     )
@@ -355,6 +373,7 @@ async def update_business_subscription_addon(
 ):
     result = await db.execute(
         select(BusinessSubscriptionAddon)
+        .options(selectinload(BusinessSubscriptionAddon.addon))
         .where(BusinessSubscriptionAddon.id == business_subscription_addon_id)
         .order_by(BusinessSubscriptionAddon.created_at.desc())
     )
