@@ -99,3 +99,6 @@ class OrderDetailResponse(OrderBase):
         
 class OrderStatusUpdate(BaseModel):
     status: OrderStatus
+
+class OrderDeliveryStatusUpdate(BaseModel):
+    delivery_status: DeliveryStatus

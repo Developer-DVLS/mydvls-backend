@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.orders import OrderDetailResponse, OrderStatusUpdate, PaginatedOrderResponse
+from app.api.v1.schemas.orders import OrderDeliveryStatusUpdate, OrderDetailResponse, OrderStatusUpdate, PaginatedOrderResponse
 from app.core.database import get_db
 from app.models.orders import DeliveryStatus, Order, OrderStatus
 from app.models.user import User
@@ -165,7 +165,7 @@ async def update_order_status(
     }
     
 @admin_order_router.delete("/{order_id:int}/")
-async def get_order(
+async def delete_order(
     order_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only)
@@ -189,4 +189,79 @@ async def get_order(
     return {
         "status": True,
         "message": "Order deleted successfully"
+    }
+    
+@admin_order_router.patch("/{order_id}/delivery-status/")
+async def update_delivery_status(
+    order_id: int,
+    data: OrderDeliveryStatusUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(staff_only)
+):
+    
+    result = await db.execute(
+        select(Order).where(Order.id == order_id)
+    )
+    order = result.scalar_one_or_none()
+
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    VALID_TRANSITIONS = {
+        DeliveryStatus.PENDING_ASSIGNMENT: [
+            DeliveryStatus.DRIVER_ASSIGNED,
+            DeliveryStatus.FAILED,
+        ],
+        DeliveryStatus.DRIVER_ASSIGNED: [
+            DeliveryStatus.PICKED_UP,
+            DeliveryStatus.FAILED,
+        ],
+        DeliveryStatus.PICKED_UP: [
+            DeliveryStatus.ON_THE_WAY,
+            DeliveryStatus.RETURNED,
+            DeliveryStatus.FAILED,
+        ],
+        DeliveryStatus.ON_THE_WAY: [
+            DeliveryStatus.DELIVERED,
+            DeliveryStatus.RETURNED,
+            DeliveryStatus.FAILED,
+        ],
+        DeliveryStatus.DELIVERED: [],
+        DeliveryStatus.FAILED: [
+            DeliveryStatus.PENDING_ASSIGNMENT,  # Optional: retry delivery
+        ],
+        DeliveryStatus.RETURNED: [],
+    }
+
+    
+    current_status = order.delivery_status
+    new_status = data.delivery_status
+    
+    # Same status check
+    if current_status == new_status:
+        return {
+            "message": "Order already has this status",
+            "order_id": order.id,
+            "delivery_status": order.delivery_status,
+        }
+        
+    # Transition validation
+    if new_status not in VALID_TRANSITIONS.get(current_status, []):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Cannot change order delivery status from "
+                f"'{current_status.value}' to '{new_status.value}'"
+            )
+        )
+
+    order.delivery_status = new_status
+    
+    await db.commit()
+    await db.refresh(order)
+
+    return {
+        "message": "Order delivery status updated successfully",
+        "order_id": order.id,
+        "status": order.delivery_status,
     }

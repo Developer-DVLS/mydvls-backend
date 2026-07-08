@@ -46,6 +46,11 @@ class CartService:
                 )
         )
         product_variant = result.scalar_one_or_none()
+        if not product_variant:
+            raise HTTPException(
+                status_code=404,
+                detail="Invalid product-variant."
+            )
 
 
         if product_variant.stock_quantity <= 0:
