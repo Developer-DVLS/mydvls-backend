@@ -339,37 +339,37 @@ async def get_invoice(
 
     return invoice
 
-from app.core.config import settings
-@order_router.get("get_token")
-async def get_test_nonce():
-    payload = {
-        "securePaymentContainerRequest": {
-            "merchantAuthentication": {
-                "name": settings.API_LOGIN_ID,
-                "transactionKey": settings.TRANSACTION_KEY,
-            },
-            "data": {
-                "type": "TOKEN",
-                "id": "test-request-1",
-                "token": {
-                    "cardNumber": "4111111111111111",
-                    "expirationDate": "1226",
-                    "cardCode": "123",
-                }
-            }
-        }
-    }
+# from app.core.config import settings
+# @order_router.get("get_token")
+# async def get_test_nonce():
+#     payload = {
+#         "securePaymentContainerRequest": {
+#             "merchantAuthentication": {
+#                 "name": settings.API_LOGIN_ID,
+#                 "transactionKey": settings.TRANSACTION_KEY,
+#             },
+#             "data": {
+#                 "type": "TOKEN",
+#                 "id": "test-request-1",
+#                 "token": {
+#                     "cardNumber": "4111111111111111",
+#                     "expirationDate": "1226",
+#                     "cardCode": "123",
+#                 }
+#             }
+#         }
+#     }
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(settings.ENDPOINT_URL, json=payload)
+#     async with httpx.AsyncClient() as client:
+#         response = await client.post(settings.ENDPOINT_URL, json=payload)
     
-    data = response.json()
-    opaque = data["opaqueData"]
-    print(opaque["dataDescriptor"])  # use this as opaqueDataDescriptor
-    print(opaque["dataValue"]) 
+#     data = response.json()
+#     opaque = data["opaqueData"]
+#     print(opaque["dataDescriptor"])  # use this as opaqueDataDescriptor
+#     print(opaque["dataValue"]) 
     
-@order_router.post("/api/charge")
-async def charge_card(payload: ChargeRequest):
-    payment_service = PaymentService()
-    response = await payment_service.charge_card(payment=payload)
-    return response
+# @order_router.post("/api/charge")
+# async def charge_card(payload: ChargeRequest):
+#     payment_service = PaymentService()
+#     response = await payment_service.charge_card(payment=payload)
+#     return response

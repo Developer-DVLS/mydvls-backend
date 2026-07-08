@@ -16,7 +16,7 @@ from app.utils.cache import get_cache
 from app.utils.send_email import send_email
 from app.services.cartservice import CartService
 from app.utils.validators import is_valid_phone
-
+from app.utils.limiter import limiter
 
 user_router = APIRouter(prefix="/users", tags=['User auth'])
 
@@ -151,7 +151,9 @@ async def verify_otp(
     }
 
 @user_router.post("/resend-otp/")
+@limiter.limit("3/hour; 10/day")
 async def resend_otp(
+    request: Request,
     data:ResendOTPRequest
 ):
     # verify phone

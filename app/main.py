@@ -3,11 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
+from slowapi.errors import RateLimitExceeded
+from slowapi import  _rate_limit_exceeded_handler
+
 from app.core.config import settings
 from app.core.database import engine, Base
 from app import models
 from app.utils.create_superuser import create_superuser
 from app.core.redis import redis_client
+from app.utils.limiter import limiter
 
 from app.models.user import User    
 from app.models.address import Address
@@ -55,6 +59,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
@@ -10,11 +10,14 @@ from app.models.user import User
 from app.services.security import get_current_user_optional
 from app.core.database import get_db
 from app.utils.teams_alert import team_alert
+from app.utils.limiter import limiter
 
 demo_request_router = APIRouter(prefix="/demo-request", tags=["User DemoRequest"])
 
 @demo_request_router.post("/")
+@limiter.limit("3/hour; 5/day")
 async def create_demo_request(
+    request: Request,
     data: UserDemoRequestCreate,
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
