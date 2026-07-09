@@ -280,3 +280,17 @@ class AddAddonRequest(BaseModel):
     service_id: int
     plan_id: int
     addon_ids: List[int]
+    
+
+#options
+class ServiceOptionResponse(BaseModel):
+    id: int
+    title: str
+    
+class SubscriptionPlanOptionResponse(BaseModel):
+    id: int
+    name: str
+    
+class SubscriptionPlanAddonOptionResponse(BaseModel):
+    id: int
+    title: str

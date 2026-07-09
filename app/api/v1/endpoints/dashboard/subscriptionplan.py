@@ -1,12 +1,12 @@
 import json
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import re
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.subscriptionplan import CreateSubscriptionPlanAddonPrice, PaginatedServiceResponse, PaginatedSubscriptionPlanResponse, ServiceCreate, ServiceResponse, ServiceUpdate, SubscriptionPlanAddonCreate, SubscriptionPlanAddonPriceResponse, SubscriptionPlanAddonResponse, SubscriptionPlanAddonUpdate, SubscriptionPlanCreate, SubscriptionPlanPriceCreate, SubscriptionPlanPriceResponse, SubscriptionPlanPriceUpdate, SubscriptionPlanResponse, SubscriptionPlanUpdate, UpdateSubscriptionPlanAddonPrice
+from app.api.v1.schemas.subscriptionplan import CreateSubscriptionPlanAddonPrice, PaginatedServiceResponse, PaginatedSubscriptionPlanResponse, ServiceCreate, ServiceOptionResponse, ServiceResponse, ServiceUpdate, SubscriptionPlanAddonCreate, SubscriptionPlanAddonOptionResponse, SubscriptionPlanAddonPriceResponse, SubscriptionPlanAddonResponse, SubscriptionPlanAddonUpdate, SubscriptionPlanCreate, SubscriptionPlanOptionResponse, SubscriptionPlanPriceCreate, SubscriptionPlanPriceResponse, SubscriptionPlanPriceUpdate, SubscriptionPlanResponse, SubscriptionPlanUpdate, UpdateSubscriptionPlanAddonPrice
 from app.core.database import get_db
 from app.models.subscriptionplan import Service, SubscriptionPlan, SubscriptionPlanAddon, SubscriptionPlanAddonPrice, SubscriptionPlanPrice
 from app.models.user import User
@@ -874,3 +874,43 @@ async def delete_addon(
         "status": True,
         "message": "Addon Price deleted successfully."
     }
+    
+@subscription_plan.get("/service-options/", response_model=List[ServiceOptionResponse])
+async def service_options(
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Service)
+        .order_by(Service.created_at.desc())
+    )
+    services = result.scalars().all()
+    if not services:
+        return []
+    return services
+
+@subscription_plan.get("/plan-options/", response_model=List[SubscriptionPlanOptionResponse])
+async def subscription_plan_options(
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(SubscriptionPlan)
+        .order_by(SubscriptionPlan.created_at.desc())
+    )
+    subscription_plans = result.scalars().all()
+    if not subscription_plans:
+        return []
+    return subscription_plans
+
+
+@subscription_plan.get("/addon-options/", response_model=List[SubscriptionPlanAddonOptionResponse])
+async def subscription_plan_addon_options(
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(SubscriptionPlanAddon)
+        .order_by(SubscriptionPlanAddon.created_at.desc())
+    )
+    subscription_plan_addons = result.scalars().all()
+    if not subscription_plan_addons:
+        return []
+    return subscription_plan_addons
