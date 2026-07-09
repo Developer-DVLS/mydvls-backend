@@ -890,12 +890,18 @@ async def service_options(
 
 @subscription_plan.get("/plan-options/", response_model=List[SubscriptionPlanOptionResponse])
 async def subscription_plan_options(
+    service_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
+    query = (
         select(SubscriptionPlan)
         .order_by(SubscriptionPlan.created_at.desc())
     )
+    if service_id:
+        query = query.where(
+            SubscriptionPlan.service_id == service_id
+        )
+    result = await db.execute(query)
     subscription_plans = result.scalars().all()
     if not subscription_plans:
         return []
@@ -904,12 +910,18 @@ async def subscription_plan_options(
 
 @subscription_plan.get("/addon-options/", response_model=List[SubscriptionPlanAddonOptionResponse])
 async def subscription_plan_addon_options(
+    subscription_plan_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
+    query = (
         select(SubscriptionPlanAddon)
         .order_by(SubscriptionPlanAddon.created_at.desc())
     )
+    if subscription_plan_id:
+        query = query.where(
+            SubscriptionPlanAddon.subscription_plan_id == subscription_plan_id
+            )
+    result = await db.execute(query)
     subscription_plan_addons = result.scalars().all()
     if not subscription_plan_addons:
         return []
