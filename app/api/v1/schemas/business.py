@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime, time
@@ -317,10 +317,33 @@ class AdminCreateBusinessSubscription(BaseModel):
     expires_at: Optional[datetime] = None
     auto_renew: bool
     is_active: bool
+    
+    @field_validator("starts_at", "expires_at", mode="before")
+    @classmethod
+    def remove_timezone(cls, v):
+        if isinstance(v, str):
+            v = datetime.fromisoformat(v.replace("Z", ""))
+
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+
+        return v
 
 class AdminCreateBusinessSubscriptionAddon(BaseModel):
     business_subscription_id: UUID
     addon_id: int
+    amount: Optional[float] = None
     starts_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
     is_active: bool
+    
+    @field_validator("starts_at", "expires_at", mode="before")
+    @classmethod
+    def remove_timezone(cls, v):
+        if isinstance(v, str):
+            v = datetime.fromisoformat(v.replace("Z", ""))
+
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+
+        return v

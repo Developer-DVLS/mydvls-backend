@@ -165,7 +165,7 @@ async def create_business_subscription(
     subscription_data["amount"] = plan_price.price
         
     business_subscription = BusinessSubscription(
-        **subscription_data.model_dump(exclude_unset=True)
+        **subscription_data
     )
     
     db.add(business_subscription)
@@ -285,13 +285,15 @@ async def create_business_subscription_addon(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(staff_only)
 ):
-    # validate plan addon
     business_service = BusinessService(db=db)
-    plan_addon = await business_service.validate_plan_addon(data.addon_id)
-    
+    #validate business subscription
+    business_subscription = await business_service.validate_business_subscription(data.business_subscription_id)
+    # validate plan addon
+    plan_addon, addon_price = await business_service.validate_plan_addon(data.addon_id, business_subscription.billing_period)
+
     #assign price
     addon_data = data.model_dump(exclude_unset=True)
-    addon_data["amount"] = plan_addon.price
+    addon_data["amount"] = addon_price.price if addon_price else 0
     
     business_subscription_addon = BusinessSubscriptionAddon(
         **addon_data

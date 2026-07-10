@@ -16,6 +16,11 @@ class DateFilter(str, Enum):
     LAST_6_MONTHS = "last_6_months"
     THIS_YEAR = "this_year"
     LAST_YEAR = "last_year"
+    
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    
     CUSTOM = "custom"
         
 class ReportService:
@@ -25,16 +30,28 @@ class ReportService:
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ):
+        print("filtertype!!!!", filter_type)
         now = datetime.utcnow()
 
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
         if filter_type == DateFilter.TODAY:
             return today, today + timedelta(days=1)
+        
+        # Daily (Year-to-date)
+        if filter_type == DateFilter.DAILY:
+            return datetime(today.year, 1, 1), now
 
         if filter_type == DateFilter.YESTERDAY:
             start = today - timedelta(days=1)
             return start, today
+        
+        # Weekly (12 complete weekly buckets)
+        if filter_type == DateFilter.WEEKLY:
+            current_week_start = today - timedelta(days=today.weekday())
+            start = current_week_start - timedelta(weeks=11)
+            end = current_week_start + timedelta(days=7)
+            return start, end
 
         if filter_type == DateFilter.THIS_WEEK:
             start = today - timedelta(days=today.weekday())
@@ -96,6 +113,10 @@ class ReportService:
                 datetime(today.year - 1, 1, 1),
                 datetime(today.year, 1, 1),
             )
+        
+        # Monthly (Year-to-date)
+        if filter_type == DateFilter.MONTHLY:
+            return datetime(today.year, 1, 1), now
 
         if filter_type == DateFilter.CUSTOM:
             return start_date, end_date

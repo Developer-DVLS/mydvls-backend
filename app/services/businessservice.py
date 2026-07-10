@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.business import BusinessSubscription
 from app.models.subscriptionplan import Service, SubscriptionPlan, SubscriptionPlanAddon, SubscriptionPlanAddonPrice, SubscriptionPlanPrice
 
 class BusinessService:
@@ -104,5 +105,19 @@ class BusinessService:
             )
         
         return plan_addon, addon_price
-        
-        
+    
+    async def validate_business_subscription(
+        self,
+        business_subscription_id
+    ):
+        business_subscription_result = await self.db.execute(
+            select(BusinessSubscription)
+            .where(BusinessSubscription.id == business_subscription_id)
+        )
+        business_subscription = business_subscription_result.scalars().first()
+        if not business_subscription:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Business subscription not found."
+            )
+        return business_subscription

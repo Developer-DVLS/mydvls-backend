@@ -15,6 +15,16 @@ from app.services.reportservice import DateFilter, ReportService
 
 report_router = APIRouter(prefix="/dashboard/report", tags=['Reports'])
     
+def get_period(column, period_type: str):
+    if period_type == "daily":
+        return func.date(column)
+    elif period_type == "weekly":
+        return func.date_trunc("week", column)
+    elif period_type == "monthly":
+        return func.date_trunc("month", column)
+    else:
+        return func.date_trunc("hour", column)
+        
 @report_router.get("/overview/")
 async def overview(
     filter_type: DateFilter = Query(DateFilter.THIS_MONTH),
@@ -32,12 +42,50 @@ async def overview(
     #--------------------------
     #date filtering
     #--------------------------
-    report_service = ReportService
+    print("type!!!!", filter_type)
+    report_service = ReportService()
     start, end = report_service.get_date_range(
         filter_type,
         start_date,
         end_date,
     )
+    
+    print("start, end1111111", start, end)
+    
+    #--------------------------
+    #group filters
+    #--------------------------
+    period_type = None
+    if filter_type in {
+        DateFilter.TODAY,
+        DateFilter.YESTERDAY,
+        DateFilter.THIS_WEEK,
+        DateFilter.LAST_WEEK,
+        DateFilter.LAST_7_DAYS,
+        DateFilter.THIS_MONTH,
+        DateFilter.LAST_MONTH,
+        DateFilter.LAST_30_DAYS,
+        DateFilter.DAILY,
+    }:
+        period_type = "daily"
+    elif filter_type == DateFilter.WEEKLY:
+        period_type = "weekly"
+    elif filter_type in {
+        DateFilter.THIS_YEAR,
+        DateFilter.LAST_YEAR,
+        DateFilter.LAST_3_MONTHS,
+        DateFilter.LAST_6_MONTHS,
+        DateFilter.MONTHLY
+        }:
+        period_type = "monthly"
+    else:
+        # Custom
+        if start and end and (end - start).days <= 31:
+            period = func.date(Order.created_at)
+            period_type = "daily"
+        else:
+            period = func.date_trunc("month", Order.created_at)
+            period_type = "monthly"
     
     #--------------------------
     #sales summary
@@ -71,6 +119,64 @@ async def overview(
     sales = sales_result.one()
     
     #--------------------------
+    #sales trend
+    #--------------------------
+    sales_trend = []
+    if period_type is not None:
+        sales_period = get_period(Order.created_at, period_type)
+        sales_trend_query = (
+            select(
+                sales_period.label("period"),
+                func.coalesce(func.sum(Order.subtotal), 0).label("gross_sales"),
+                func.coalesce(
+                    func.sum(Order.subtotal - Order.discount_amount),
+                    0,
+                ).label("net_sales"),
+                func.coalesce(func.sum(Order.total), 0).label("total_sales"),
+                func.coalesce(func.sum(Order.discount_amount), 0).label("discount_amount"),
+                func.coalesce(func.sum(Order.tax_amount), 0).label("tax_amount"),
+                func.coalesce(func.sum(Order.delivery_charge), 0).label("shipping_charge"),
+            )
+            .where(
+                Order.status == OrderStatus.COMPLETED,
+                Order.payment_status == "paid",
+                Order.delivery_status == DeliveryStatus.DELIVERED,
+            )
+        )
+
+        if start and end:
+            sales_trend_query = sales_trend_query.where(
+                Order.created_at >= start,
+                Order.created_at < end,
+            )
+
+        sales_trend_query = (
+            sales_trend_query
+            .group_by(sales_period)
+            .order_by(sales_period)
+        )
+
+        result = await db.execute(sales_trend_query)
+
+        for row in result.all():
+            if period_type == "daily":
+                label = row.period.strftime("%Y %b %-d")
+            elif period_type == "weekly":
+                label = f"Week of {row.period.strftime('%Y %b %-d')}"
+            else:
+                label = row.period.strftime("%Y %b")
+
+            sales_trend.append({
+                "label": label,
+                "gross_sales": float(row.gross_sales),
+                "net_sales": float(row.net_sales),
+                "discount_amount": float(row.discount_amount),
+                "tax_amount": float(row.tax_amount),
+                "shipping_charge": float(row.shipping_charge),
+                "total_sales": float(row.total_sales),
+            })
+    
+    #--------------------------
     #orders summary
     #--------------------------
     order_query = (
@@ -88,6 +194,55 @@ async def overview(
         )
     order_result = await db.execute(order_query)
     orders = order_result.one()
+    
+    #--------------------------
+    #orders trend
+    #--------------------------
+    order_trend = []
+
+    if period_type is not None:
+        order_period = get_period(Order.created_at, period_type)
+
+        order_trend_query = (
+            select(
+                order_period.label("period"),
+                func.count(case((Order.status == OrderStatus.COMPLETED, 1))).label("completed_orders"),
+                func.count(case((Order.status == OrderStatus.PENDING, 1))).label("pending_orders"),
+                func.count(case((Order.status == OrderStatus.CANCELLED, 1))).label("cancelled_orders"),
+                func.count(case((Order.status == OrderStatus.REFUNDED, 1))).label("refunded_orders"),
+            )
+        )
+
+        if start and end:
+            order_trend_query = order_trend_query.where(
+                Order.created_at >= start,
+                Order.created_at < end,
+            )
+
+        order_trend_query = (
+            order_trend_query
+            .group_by(order_period)
+            .order_by(order_period)
+        )
+
+        result = await db.execute(order_trend_query)
+
+        for row in result.all():
+            if period_type == "daily":
+                label = row.period.strftime("%Y %b %-d")
+            elif period_type == "weekly":
+                label = f"Week of {row.period.strftime('%Y %b %-d')}"
+            else:
+                label = row.period.strftime("%Y %b")
+
+            order_trend.append({
+                
+                "label": label,
+                "completed_orders": row.completed_orders,
+                "pending_orders": row.pending_orders,
+                "cancelled_orders": row.cancelled_orders,
+                "refunded_orders": row.refunded_orders,
+            })
 
     #--------------------------
     #products summary
@@ -107,6 +262,57 @@ async def overview(
     product_result = await db.execute(product_query)
     products = product_result.one()
     
+    #--------------------------
+    #products trend
+    #--------------------------
+    print("period_type!!!!", period_type)
+    product_trend = []
+    
+    if period_type is not None:
+        product_period = get_period(Product.created_at, period_type)
+        print("product_period!!!", product_period)
+        product_trend_query = (
+            select(
+                product_period.label("period"),
+                func.count(Product.id).label("total_products"),
+                func.count(case((Product.is_active == True, 1))).label("active_products"),
+                func.count(case((Product.is_active == False, 1))).label("inactive_products"),
+            )
+        )
+        print("start, end!!!!", start, end)
+        if start and end:
+            product_trend_query = product_trend_query.where(
+                Product.created_at >= start,
+                Product.created_at < end,
+            )
+
+        product_trend_query = (
+            product_trend_query
+            .group_by(product_period)
+            .order_by(product_period)
+        )
+
+        result = await db.execute(product_trend_query)
+
+        for row in result.all():
+            if period_type == "daily":
+                label = row.period.strftime("%Y %b %-d")
+            elif period_type == "weekly":
+                label = f"Week of {row.period.strftime('%Y %b %-d')}"
+            else:
+                label = row.period.strftime("%Y %b")
+
+            product_trend.append({
+                
+                "label": label,
+                "total_products": row.total_products,
+                "active_products": row.active_products,
+                "inactive_products": row.inactive_products,
+            })
+            
+    #--------------------------
+    #products variant summary
+    #--------------------------
     variant_query = (
         select(
             func.count(ProductVariant.id).label("total_variants"),
@@ -135,6 +341,62 @@ async def overview(
     variants = variant_result.one()
     
     #--------------------------
+    #products variant trend
+    #--------------------------
+    variant_trend = []
+    
+    if period_type is not None:
+        variant_period = get_period(ProductVariant.created_at, period_type)
+
+        variant_trend_query = (
+            select(
+                variant_period.label("period"),
+                func.count(ProductVariant.id).label("total_variants"),
+                func.count(
+                    case((ProductVariant.stock_quantity == 0, 1))
+                ).label("out_of_stock_products"),
+                func.count(
+                    case((
+                        and_(
+                            ProductVariant.stock_quantity >= 1,
+                            ProductVariant.stock_quantity <= 5,
+                        ),
+                        1,
+                    ))
+                ).label("low_stock_products"),
+            )
+        )
+
+        if start and end:
+            variant_trend_query = variant_trend_query.where(
+                ProductVariant.created_at >= start,
+                ProductVariant.created_at < end,
+            )
+
+        variant_trend_query = (
+            variant_trend_query
+            .group_by(variant_period)
+            .order_by(variant_period)
+        )
+
+        result = await db.execute(variant_trend_query)
+
+        for row in result.all():
+            if period_type == "daily":
+                label = row.period.strftime("%Y %b %-d")
+            elif period_type == "weekly":
+                label = f"Week of {row.period.strftime('%Y %b %-d')}"
+            else:
+                label = row.period.strftime("%Y %b")
+
+            variant_trend.append({
+                "label": label,
+                "total_variants": row.total_variants,
+                "out_of_stock_products": row.out_of_stock_products,
+                "low_stock_products": row.low_stock_products,
+            })
+    
+    #--------------------------
     #users summary
     #--------------------------
     user_query = (
@@ -153,6 +415,53 @@ async def overview(
     user_result = await db.execute(user_query)
     users = user_result.one()
     
+    #--------------------------
+    #users trend
+    #--------------------------
+    user_trend = []
+    if period_type is not None:
+        user_period = get_period(User.created_at, period_type)
+        
+        user_trend_query = (
+            select(
+                user_period.label("period"),
+                func.count(User.id).label("total_users"),
+                func.count(case((User.is_active == True, 1))).label("active_users"),
+                func.count(case((User.is_active == False, 1))).label("inactive_users"),
+                func.count(case((User.is_guest == True, 1))).label("guest_users"),
+            )
+        )
+
+        if start and end:
+            user_trend_query = user_trend_query.where(
+                User.created_at >= start,
+                User.created_at < end,
+            )
+
+        user_trend_query = (
+            user_trend_query
+            .group_by(user_period)
+            .order_by(user_period)
+        )
+
+        result = await db.execute(user_trend_query)
+
+        for row in result.all():
+            if period_type == "daily":
+                label = row.period.strftime("%Y %b %-d")
+            elif period_type == "weekly":
+                label = f"Week of {row.period.strftime('%Y %b %-d')}"
+            else:
+                label = row.period.strftime("%Y %b")
+
+            user_trend.append({
+                "label": label,
+                "total_users": row.total_users,
+                "active_users": row.active_users,
+                "inactive_users": row.inactive_users,
+                "guest_users": row.guest_users,
+            })
+        
     return {
         "sales_summary": {
             "gross_sales": sales.gross_sales,
@@ -181,7 +490,11 @@ async def overview(
             "active_users": users.active_users,
             "inactive_users": users.inactive_users,
             "guest_users": users.guest_users,
-        }
+        },
+        "sales_trend": sales_trend,
+        "order_trend": order_trend,
+        "product_trend": product_trend,
+        "user_trend": user_trend
     }
     
 
@@ -210,7 +523,7 @@ async def sales_report(
     #--------------------------
     #date filtering
     #--------------------------
-    report_service = ReportService
+    report_service = ReportService()
     start, end = report_service.get_date_range(
         filter_type,
         start_date,
@@ -252,17 +565,76 @@ async def sales_report(
     #orders
     #--------------------------
     
+    #--------------------------
+    #grouping filter response
+    #--------------------------
+    if filter_type in {
+        DateFilter.TODAY,
+        DateFilter.YESTERDAY
+    }:
+        # Group by hour
+        period = func.date_trunc("hour", Order.created_at)
+        period_type = "hourly"
+
+    elif filter_type in {
+        DateFilter.DAILY,
+        DateFilter.THIS_WEEK,
+        DateFilter.LAST_WEEK,
+        DateFilter.LAST_7_DAYS,
+        DateFilter.THIS_MONTH,
+        DateFilter.LAST_MONTH,
+        DateFilter.LAST_30_DAYS,
+    }:
+        # Group by day
+        period = func.date(Order.created_at)
+        period_type = "daily"
+        
+    elif filter_type in {
+        DateFilter.WEEKLY,
+    }:
+        # Weekly
+        period = func.date_trunc("week", Order.created_at)
+        period_type = "weekly"
+
+    elif filter_type in {
+        DateFilter.THIS_YEAR,
+        DateFilter.LAST_YEAR,
+        DateFilter.LAST_3_MONTHS,
+        DateFilter.LAST_6_MONTHS,
+        DateFilter.MONTHLY,
+    }:
+        # Group by month
+        period = func.date_trunc("month", Order.created_at)
+        period_type = "monthly"
+
+    else:
+        # Custom
+        if start and end and (end - start).days <= 31:
+            period = func.date(Order.created_at)
+            period_type = "daily"
+        else:
+            period = func.date_trunc("month", Order.created_at)
+            period_type = "monthly"
+    
     orders_query = (
-        select(Order)
-        .options(
-            selectinload(Order.user)
+        select(
+            period.label("period"),
+            func.coalesce(func.sum(Order.subtotal), 0).label("gross_sales"),
+            func.coalesce(
+                func.sum(Order.subtotal - Order.discount_amount),
+                0,
+            ).label("net_sales"),
+            func.coalesce(func.sum(Order.total), 0).label("total_sales"),
+            func.coalesce(func.sum(Order.tax_amount), 0).label("tax_amount"),
+            func.coalesce(func.sum(Order.discount_amount), 0).label("discount_amount"),
+            func.coalesce(func.sum(Order.delivery_charge), 0).label("delivery_charge"),
+            func.count(Order.id).label("total_orders"),
         )
         .where(
             Order.status == OrderStatus.COMPLETED,
             Order.payment_status == "paid",
             Order.delivery_status == DeliveryStatus.DELIVERED,
         )
-        .order_by(Order.created_at.desc())
     )
 
     if start and end:
@@ -293,9 +665,39 @@ async def sales_report(
             Order.delivery_status == delivery_status
         )
 
-    orders_query = orders_query.offset(skip).limit(limit)
+    orders_query = (
+        orders_query
+        .group_by(period)
+        .order_by(period)
+        .offset(skip)
+        .limit(limit)
+    )
 
-    orders = (await db.execute(orders_query)).scalars().all()
+    order_result = await db.execute(orders_query)
+    orders = order_result.all()
+    
+    order_response = []
+
+    for row in orders:
+        if period_type == "hourly":
+            label = row.period.strftime("%I:%M %p")      # e.g. 09:00 AM
+        elif period_type == "daily":
+            label = row.period.strftime("%Y %b %-d")     # e.g. 2026 Jul 10
+        elif period_type == "weekly":
+            label = f"Week of {row.period.strftime('%Y %b %-d')}"
+        else:
+            label = row.period.strftime("%Y %b")         # e.g. 2026 Jul
+
+        order_response.append({
+            "label": label,
+            "gross_sales": row.gross_sales,
+            "net_sales": row.net_sales,
+            "discount_amount": row.discount_amount,
+            "tax_amount": row.tax_amount,
+            "shipping_charge": row.delivery_charge,
+            "total_sales": row.total_sales,
+            "total_orders": row.total_orders,
+        })
     
     return {
         "summary": {
@@ -307,21 +709,7 @@ async def sales_report(
             "total_sales": summary.total_sales,
             "total_orders": summary.total_orders,
         },
-        "orders": [
-            {
-                "id": order.id,
-                "order_number": order.order_number,
-                "customer": order.user.email if order.user else None,
-                "date": order.created_at.strftime("%Y %b %-d"),
-                "subtotal": order.subtotal,
-                "discount": order.discount_amount,
-                "tax": order.tax_amount,
-                "shipping": order.delivery_charge,
-                "total": order.total,
-                "payment_method": order.payment_method,
-            }
-            for order in orders
-        ]
+        "orders": order_response
     }
     
 @report_router.get("/sales-by-item/")
@@ -412,11 +800,9 @@ async def sales_by_item(
             "product_id": row.product_id,
             "product_name": row.product_name,
             "variant_id": row.variant_id,
-            "variant_name": row.variant_name,
+            "variant_name": row.variant_sku,
             "quantity_sold": row.quantity_sold,
             "gross_sales": row.gross_sales,
-            "discount_amount": row.discount_amount,
-            "tax_amount": row.tax_amount,
             "total_sales": row.total_sales,
         }
         for row in results
