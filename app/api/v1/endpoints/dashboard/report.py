@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.orders import DeliveryStatus, Order, OrderItem, OrderStatus
-from app.models.products import Product, ProductVariant
+from app.models.products import Product, ProductCategory, ProductVariant
 from app.models.user import User
 from app.auth.permissions import staff_only
 from app.core.database import get_db
@@ -745,6 +745,7 @@ async def sales_by_item(
     
     query = (
         select(
+            ProductCategory.name.label("category_name"),
             Product.id.label("product_id"),
             Product.name.label("product_name"),
             ProductVariant.id.label("variant_id"),
@@ -781,6 +782,7 @@ async def sales_by_item(
     query = (
         query
         .group_by(
+            ProductCategory.name,
             Product.id,
             Product.name,
             ProductVariant.id,
@@ -795,6 +797,7 @@ async def sales_by_item(
     
     return [
         {
+            "category_name": row.category_name,
             "product_id": row.product_id,
             "product_name": row.product_name,
             "variant_id": row.variant_id,
