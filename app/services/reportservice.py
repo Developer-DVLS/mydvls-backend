@@ -30,7 +30,6 @@ class ReportService:
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ):
-        print("filtertype!!!!", filter_type)
         now = datetime.utcnow()
 
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)

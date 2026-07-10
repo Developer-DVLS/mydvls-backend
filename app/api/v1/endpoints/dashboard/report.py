@@ -11,6 +11,7 @@ from app.models.products import Product, ProductVariant
 from app.models.user import User
 from app.auth.permissions import staff_only
 from app.core.database import get_db
+from app.models.visits import Visit
 from app.services.reportservice import DateFilter, ReportService
 
 report_router = APIRouter(prefix="/dashboard/report", tags=['Reports'])
@@ -42,16 +43,13 @@ async def overview(
     #--------------------------
     #date filtering
     #--------------------------
-    print("type!!!!", filter_type)
     report_service = ReportService()
     start, end = report_service.get_date_range(
         filter_type,
         start_date,
         end_date,
     )
-    
-    print("start, end1111111", start, end)
-    
+        
     #--------------------------
     #group filters
     #--------------------------
@@ -112,8 +110,8 @@ async def overview(
     )
     if start and end:
         sales_query = sales_query.where(
-            Order.created_at >= start,
-            Order.created_at < end,
+            func.date(Order.created_at) >= start.date(),
+            func.date(Order.created_at) < end.date(),
         )
     sales_result = await db.execute(sales_query)
     sales = sales_result.one()
@@ -146,8 +144,8 @@ async def overview(
 
         if start and end:
             sales_trend_query = sales_trend_query.where(
-                Order.created_at >= start,
-                Order.created_at < end,
+                func.date(Order.created_at) >= start.date(),
+                func.date(Order.created_at) < end.date(),
             )
 
         sales_trend_query = (
@@ -189,8 +187,8 @@ async def overview(
     )
     if start and end:
         order_query = order_query.where(
-            Order.created_at >= start,
-            Order.created_at < end,
+            func.date(Order.created_at) >= start.date(),
+            func.date(Order.created_at) < end.date(),
         )
     order_result = await db.execute(order_query)
     orders = order_result.one()
@@ -215,8 +213,8 @@ async def overview(
 
         if start and end:
             order_trend_query = order_trend_query.where(
-                Order.created_at >= start,
-                Order.created_at < end,
+            func.date(Order.created_at) >= start.date(),
+            func.date(Order.created_at) < end.date(),
             )
 
         order_trend_query = (
@@ -256,8 +254,8 @@ async def overview(
     )
     if start and end:
         product_query = product_query.where(
-            Product.created_at >= start,
-            Product.created_at < end,
+            func.date(Product.created_at) >= start.date(),
+            func.date(Product.created_at) < end.date(),
         )
     product_result = await db.execute(product_query)
     products = product_result.one()
@@ -282,8 +280,8 @@ async def overview(
         print("start, end!!!!", start, end)
         if start and end:
             product_trend_query = product_trend_query.where(
-                Product.created_at >= start,
-                Product.created_at < end,
+                func.date(Product.created_at) >= start.date(),
+                func.date(Product.created_at) < end.date(),
             )
 
         product_trend_query = (
@@ -334,8 +332,8 @@ async def overview(
     )
     if start and end:
         variant_query = variant_query.where(
-            ProductVariant.created_at >= start,
-            ProductVariant.created_at < end,
+            func.date(ProductVariant.created_at) >= start.date(),
+            func.date(ProductVariant.created_at) < end.date(),
         )
     variant_result = await db.execute(variant_query) 
     variants = variant_result.one()
@@ -369,8 +367,8 @@ async def overview(
 
         if start and end:
             variant_trend_query = variant_trend_query.where(
-                ProductVariant.created_at >= start,
-                ProductVariant.created_at < end,
+                func.date(ProductVariant.created_at) >= start.date(),
+                func.date(ProductVariant.created_at) < end.date(),
             )
 
         variant_trend_query = (
@@ -409,8 +407,8 @@ async def overview(
     )
     if start and end:
         user_query = user_query.where(
-            User.created_at >= start,
-            User.created_at < end,
+            func.date(User.created_at) >= start.date(),
+            func.date(User.created_at) < end.date(),
         )
     user_result = await db.execute(user_query)
     users = user_result.one()
@@ -434,8 +432,8 @@ async def overview(
 
         if start and end:
             user_trend_query = user_trend_query.where(
-                User.created_at >= start,
-                User.created_at < end,
+                func.date(User.created_at) >= start.date(),
+                func.date(User.created_at) < end.date(),
             )
 
         user_trend_query = (
@@ -555,8 +553,8 @@ async def sales_report(
 
     if start and end:
         summary_query = summary_query.where(
-            Order.created_at >= start,
-            Order.created_at < end,
+            func.date(Order.created_at) >= start.date(),
+            func.date(Order.created_at) < end.date(),
         )
 
     summary = (await db.execute(summary_query)).one()
@@ -639,8 +637,8 @@ async def sales_report(
 
     if start and end:
         orders_query = orders_query.where(
-            Order.created_at >= start,
-            Order.created_at < end,
+            func.date(Order.created_at) >= start.date(),
+            func.date(Order.created_at) < end.date(),
         )
     
     if search:
@@ -767,8 +765,8 @@ async def sales_by_item(
     
     if start and end:
         query = query.where(
-            Order.created_at >= start,
-            Order.created_at < end,
+            func.date(Order.created_at) >= start.date(),
+            func.date(Order.created_at) < end.date(),
         )
         
     if search:
@@ -807,3 +805,182 @@ async def sales_by_item(
         }
         for row in results
     ]
+    
+    
+@report_router.get("/visit-report/")
+async def visit_report(
+    filter_type: DateFilter = Query(
+        DateFilter.THIS_MONTH,
+        description="Date range for the report."
+    ),
+    start_date: datetime | None = Query(
+        None,
+        description="Required when filter_type=CUSTOM."
+    ),
+    end_date: datetime | None = Query(
+        None,
+        description="Required when filter_type=CUSTOM."
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(staff_only),
+):
+    report_service = ReportService()
+    start, end = report_service.get_date_range(
+        filter_type,
+        start_date,
+        end_date,
+    )
+    
+    #--------------------------
+    #grouping filter response
+    #--------------------------
+    if filter_type in {
+        DateFilter.TODAY,
+        DateFilter.YESTERDAY
+    }:
+        # Group by hour
+        period = func.date_trunc("hour", Visit.created_at)
+        period_type = "hourly"
+
+    elif filter_type in {
+        DateFilter.DAILY,
+        DateFilter.THIS_WEEK,
+        DateFilter.LAST_WEEK,
+        DateFilter.LAST_7_DAYS,
+        DateFilter.THIS_MONTH,
+        DateFilter.LAST_MONTH,
+        DateFilter.LAST_30_DAYS,
+    }:
+        # Group by day
+        period = func.date(Visit.created_at)
+        period_type = "daily"
+        
+    elif filter_type in {
+        DateFilter.WEEKLY,
+    }:
+        # Weekly
+        period = func.date_trunc("week", Visit.created_at)
+        period_type = "weekly"
+
+    elif filter_type in {
+        DateFilter.THIS_YEAR,
+        DateFilter.LAST_YEAR,
+        DateFilter.LAST_3_MONTHS,
+        DateFilter.LAST_6_MONTHS,
+        DateFilter.MONTHLY,
+    }:
+        # Group by month
+        period = func.date_trunc("month", Visit.created_at)
+        period_type = "monthly"
+
+    else:
+        # Custom
+        if start and end and (end - start).days <= 31:
+            period = func.date(Visit.created_at)
+            period_type = "daily"
+        else:
+            period = func.date_trunc("month", Visit.created_at)
+            period_type = "monthly"
+    
+    #--------------------------
+    #visit report
+    #--------------------------
+    
+    filters = [
+        func.date(Visit.created_at) >= start.date(),
+        func.date(Visit.created_at) <= end.date(),
+    ]
+
+    total_visits = await db.scalar(
+        select(func.count())
+        .select_from(Visit)
+        .where(*filters)
+    )
+
+    source_result = await db.execute(
+        select(
+            period.label("period"),
+            Visit.source,
+            func.count().label("count"),
+        )
+        .where(*filters)
+        .group_by(
+            period,
+            Visit.source
+        )
+        .order_by(period)
+    )
+
+    medium_result = await db.execute(
+        select(
+            period.label("period"),
+            Visit.medium,
+            func.count().label("count"),
+        )
+        .where(*filters)
+        .group_by(
+            period,
+            Visit.medium
+        )
+        .order_by(period)
+    )
+    
+    campaign_result = await db.execute(
+        select(
+            period.label("period"),
+            Visit.campaign,
+            func.count().label("count"),
+        )
+        .where(
+            *filters,
+            Visit.campaign.is_not(None),
+            func.trim(Visit.campaign) != "",
+        )
+        .group_by(
+            period,
+            Visit.campaign
+        )
+        .order_by(period)
+    )
+    
+    def format_period(value, period_type):
+        if period_type == "hourly":
+            return value.strftime("%Y %b %d %H:00")
+
+        if period_type == "daily":
+            return value.strftime("%Y %b %d")
+
+        if period_type in ["weekly", "monthly"]:
+            return value.strftime("%Y %b")
+
+        return value
+
+    return {
+        "total_visits": total_visits,
+        "sources": [
+            {
+                "period": format_period(row.period, period_type),
+                "source": row.source,
+                "count": row.count,
+            }
+            for row in source_result
+        ],
+
+        "mediums": [
+            {
+                "period": format_period(row.period, period_type),
+                "medium": row.medium,
+                "count": row.count,
+            }
+            for row in medium_result
+        ],
+
+        "campaigns": [
+            {
+                "period": format_period(row.period, period_type),
+                "campaign": row.campaign,
+                "count": row.count,
+            }
+            for row in campaign_result
+        ],
+    }
