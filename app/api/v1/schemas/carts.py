@@ -123,6 +123,10 @@ class CartProductResponse(BaseModel):
     subtotal: Optional[float] = 0
     discount_amount: Optional[float] = 0
     discounted_amount: Optional[float] = 0
+    stock_type: Optional[str] = None
+    in_stock: Optional[bool] = None
+    available_stock: Optional[int] = 0
+    stock_msg: Optional[str] = None
     # created_at: datetime
     # updated_at: datetime
     
@@ -165,6 +169,7 @@ class CartResponse(BaseModel):
     total_discount_amount: Optional[float] = 0
     tax_percent: Optional[float] = 0.00
     tax_amount: Optional[float] = 0.00
+    shipping_charge: Optional[float] = 0.00
     total_amount: Optional[float] = 0
     coupon_applied: Optional[bool] = False
     coupon_applicable: Optional[bool] = None

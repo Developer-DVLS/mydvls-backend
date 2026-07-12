@@ -1,6 +1,6 @@
 from typing import Optional
 import uuid
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -49,6 +49,20 @@ class OrderService:
             
         if not cart.cart_products:
             raise ValueError("Cart is Empty")
+        
+        # inventory check
+        for cart_product in cart.cart_products:
+            try:
+                cart_service.check_stock(
+                    self.db, 
+                    cart_product.product_variant_id, 
+                    cart_product.quantity
+                    )
+            except HTTPException as e:
+                raise HTTPException(
+                    status_code=e.status_code,
+                    detail=e.detail["message"]
+                )
         
         # validate user auth
         if not user:
@@ -120,7 +134,7 @@ class OrderService:
             subtotal = enriched_cart.subtotal,
             tax_amount = enriched_cart.tax_amount,
             discount_amount = enriched_cart.total_discount_amount,
-            delivery_charge = 0, #TODO: need to calculate delivery charge
+            delivery_charge = enriched_cart.shipping_charge,
             total = enriched_cart.total_amount,
             currency = data.currency or "USD",
             notes = data.notes,

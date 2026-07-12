@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.v1.schemas.carts import CartBOGOFreeItem, CartBOGOMeta, CartGetItem, CartGetItemProduct, CartOfferResponse, CartResponse, ProductVariantResponse
 from app.models.carts import Cart, CartProduct, CartStatus
+from app.models.delivery import DeliveryConfig
 from app.models.offers import ComboDiscountType, ComboOffer, DiscountType, Offer, OfferType
 from app.models.orders import Order
 from app.models.products import Product, ProductCategory, ProductVariant, VariantOptionValue
@@ -56,17 +57,28 @@ class CartService:
         if product_variant.stock_quantity <= 0:
             raise HTTPException(
                 status_code=400,
-                detail=f"{product_variant.product.name} is out of stock."
+                detail={
+                    "type": "out_of_stock",
+                    "message": f"{product_variant.product.name} is out of stock.",
+                    "available_stock": 0,
+                },
             )
 
         if requested_quantity > product_variant.stock_quantity:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"Only {product_variant.stock_quantity} item(s) available "
-                    f"for {product_variant.product.name}."
-                )
+                detail={
+                    "type": "insufficient_stock",
+                    "message": f"Only {product_variant.stock_quantity} item(s) available for {product_variant.product.name}",
+                    "available_stock": product_variant.stock_quantity,
+                }
             )
+        
+        return {
+            "type": "sufficient_stock",
+            "message": "Stock available",
+            "available_stock": product_variant.stock_quantity
+        }
     
     def validate_cart_quantity(
         self,
@@ -86,7 +98,7 @@ class CartService:
             )
 
         return total_quantity
-    
+
     # ======================================================
     # CART
     # ======================================================
@@ -341,11 +353,17 @@ class CartService:
             if int(item.get("id")) == int(cart_product_id):
                 # check stock
                 if quantity > item["quantity"]:
-                    await self.check_stock(
-                        db,
-                        item["product_variant_id"],
-                        quantity
-                    )
+                    try:
+                        await self.check_stock(
+                            db,
+                            item["product_variant_id"],
+                            quantity
+                        )
+                    except HTTPException as e:
+                        raise HTTPException(
+                            status_code=e.status_code,
+                            detail=e.detail["message"]
+                        )
                 
                 if quantity > item["quantity"]:
                     if "quantity_after_combo" in item:
@@ -628,11 +646,17 @@ class CartService:
         
         # check stock
         if quantity > item.quantity:
-            await self.check_stock(
-                db,
-                cart_product.product_variant_id,
-                quantity
-            )
+            try:
+                await self.check_stock(
+                    db,
+                    cart_product.product_variant_id,
+                    quantity
+                )
+            except HTTPException as e:
+                raise HTTPException(
+                    status_code=e.status_code,
+                    detail=e.detail["message"]
+                )
         
         for cache_cart_item in cache_cart_items:
             if int(cache_cart_item.get("id")) == int(item.id):
@@ -863,6 +887,32 @@ class CartService:
         if not cart.cart_products:
             return cart
         
+        #check stock
+        for cart_product in cart.cart_products:
+            try:
+                check_stock_response = await self.check_stock(
+                    db, 
+                    cart_product.product_variant_id, 
+                    cart_product.quantity
+                    )
+                
+                cart_product.stock_type = check_stock_response["type"]
+                cart_product.in_stock = True
+                cart_product.available_stock = check_stock_response["available_stock"]
+                cart_product.stock_msg = check_stock_response["message"]
+            except HTTPException as e:
+                if e.detail["type"] == "out_of_stock":
+                    cart_product.stock_type =  e.detail["type"]
+                    cart_product.in_stock = False
+                    cart_product.available_stock = 0
+                    cart_product.stock_msg = e.detail["message"]
+
+                elif e.detail["type"] == "insufficient_stock":
+                    cart_product.stock_type =  e.detail["type"]
+                    cart_product.in_stock = False
+                    cart_product.available_stock = e.detail["available_stock"]
+                    cart_product.stock_msg = e.detail["message"] + ". " + "Update quantity before checkout."
+        
         # check for combo offer
         combo_offers = None
         valid_combo_offers_result = await valid_combo_offers(db)
@@ -995,6 +1045,9 @@ class CartService:
                         # mark boolean for bogo in cart
                         cart.bogo_offer_exists = True
               
+        # cart totals
+        cart = self.calculate_cart_total(cart)
+        
         #tax calculation
         tax_percent = await self.tax_calculation(db)
         if tax_percent:
@@ -1004,8 +1057,11 @@ class CartService:
             #total after adding tax 
             cart.total_amount = cart.total_amount + tax_amount
         
-        # cart totals
-        cart = self.calculate_cart_total(cart)
+        # shipping charge calculation
+        shipping_charge = await self.shipping_charge_calculation(db)
+        if shipping_charge:
+            cart.shipping_charge = shipping_charge
+            cart.total_amount = cart.total_amount + shipping_charge
         
         # coupon validation
         if remove_coupon:
@@ -1042,7 +1098,6 @@ class CartService:
         
         #calculate total
         total_amount = subtotal - discount_amount
-        
         cart.total_amount += total_amount
         
         return cart
@@ -1680,6 +1735,9 @@ class CartService:
         self, 
         db: AsyncSession,
     ):
+        """ 
+        Takes all active product and global taxconfig  and returns total tax
+        """
         tax_result = await db.execute(
             select(TaxConfig)
             .where(
@@ -1694,3 +1752,32 @@ class CartService:
         total_tax_percent = sum(float(tax.tax_percentage) for tax in taxes)
         
         return total_tax_percent
+    
+    # ======================================================
+    # shipping charge calculation
+    # ======================================================
+    async def shipping_charge_calculation(
+        self,
+        db: AsyncSession,
+    ):
+        """ 
+        Returns the delivery charge from the first active delivery configuration.
+
+        Currently, the system uses the first active configuration as a flat delivery fee.
+        
+        TODO:
+        - Calculate delivery charges based on delivery distance.
+        - Support multiple delivery charge configurations (e.g., by distance, zone, or region).
+        - Select the appropriate configuration dynamically instead of always using the first active one.
+        """
+        
+        delivery_charge_result = await db.execute(
+            select(DeliveryConfig)
+            .where(DeliveryConfig.is_active == True)
+        )
+        delivery_charge = delivery_charge_result.scalars().first()
+        if not delivery_charge:
+            return 0
+            
+        return float(delivery_charge.delivery_fee)
+        
