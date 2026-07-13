@@ -17,6 +17,7 @@ class UserDemoRequestCreate(BaseModel):
     preferred_date: Optional[datetime] = None
     timezone: Optional[str] = None
     message: Optional[str] = None
+    recaptcha_token: str
     
     @field_validator("preferred_date", mode="before")
     @classmethod

@@ -55,7 +55,9 @@ async def create_order(
         payment_payload = {
             "opaqueDataDescriptor": data.opaqueDataDescriptor,
             "opaqueDataValue": data.opaqueDataValue,
-            "amount": order.total
+            "amount": order.total,
+            "order_number": order.order_number,
+            "receiver_email": order.receiver_email
         }
         result = await payment_service.charge_card(payment=payment_payload)
         

@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     TEAMS_ALERT_URL: str = os.getenv('TEAMS_ALERT_URL', '')
     TEAMS_ALERT_SECRET: str = os.getenv('TEAMS_ALERT_SECRET', '')
     
+    ## google recaptcha
+    RECAPTCHA_VERIFY_URL: str = os.getenv('RECAPTCHA_VERIFY_URL', '')
+    RECAPTCHA_SECRET_KEY: str = os.getenv('RECAPTCHA_SECRET_KEY', '')
+    
     @property
     def tz(self):
         """Return pytz timezone object"""

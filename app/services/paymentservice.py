@@ -30,6 +30,12 @@ class PaymentService:
                             "dataValue": payment["opaqueDataValue"],
                         }
                     },
+                    "order": {
+                        "invoiceNumber": payment["order_number"]
+                    },
+                    "customer": {
+                        "email": payment["receiver_email"]
+                    },
                 },
             }
         }
