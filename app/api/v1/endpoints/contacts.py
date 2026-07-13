@@ -11,7 +11,7 @@ from app.utils.limiter import limiter
 contact_router = APIRouter(prefix="/contact", tags=['Contact'])
 
 @contact_router.post("/")
-@limiter.limit("1/minute; 5/day")
+# @limiter.limit("1/minute; 5/day")
 async def create_contact(
     request: Request,
     data: ContactCreate,

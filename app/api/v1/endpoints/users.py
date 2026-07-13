@@ -151,7 +151,7 @@ async def verify_otp(
     }
 
 @user_router.post("/resend-otp/")
-@limiter.limit("3/hour; 10/day")
+# @limiter.limit("3/hour; 10/day")
 async def resend_otp(
     request: Request,
     data:ResendOTPRequest

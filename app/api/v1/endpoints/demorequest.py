@@ -16,7 +16,7 @@ from app.utils.limiter import limiter
 demo_request_router = APIRouter(prefix="/demo-request", tags=["User DemoRequest"])
 
 @demo_request_router.post("/")
-@limiter.limit("3/hour; 5/day")
+# @limiter.limit("3/hour; 5/day")
 async def create_demo_request(
     request: Request,
     data: UserDemoRequestCreate,
