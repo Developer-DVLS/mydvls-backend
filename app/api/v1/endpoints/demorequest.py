@@ -20,7 +20,6 @@ demo_request_router = APIRouter(prefix="/demo-request", tags=["User DemoRequest"
 async def create_demo_request(
     request: Request,
     data: UserDemoRequestCreate,
-    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     await RecaptchaService.verify(
@@ -28,6 +27,7 @@ async def create_demo_request(
         action="demorequest"
     )
     
+    current_user = await get_current_user_optional(db)
 
     demo_request = DemoRequest(
         user_id = current_user.id if current_user else None,
