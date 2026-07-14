@@ -1,7 +1,7 @@
 from typing import Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -20,6 +20,7 @@ from app.models.subscriptionplan import (
 from app.api.v1.schemas.business import  AddBusinessSubscription, BusinessResponse, CreateBusiness, PaginatedBusinessResponse, UpdateUserBusiness
 from app.core.database import get_db
 from app.services.businessservice import BusinessService
+from app.services.recaptchaservice import RecaptchaService
 from app.services.security import get_current_user
 from app.utils.pagination import get_paginated_result
 from app.utils.teams_alert import team_alert
@@ -31,10 +32,17 @@ business_router = APIRouter(prefix="/businesses", tags=["Businesses"])
 
 @business_router.post("/register/")
 async def register_business(
+    request: Request,
     payload: CreateBusiness,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # reCptcha
+    await RecaptchaService.verify(
+        token=payload.recaptcha_token,
+        action="register-business"
+    )
+    
     business_service = BusinessService(db=db)
     
     # Prevent duplicate business email

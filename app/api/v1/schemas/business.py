@@ -73,6 +73,8 @@ class CreateBusiness(BaseModel):
     vat_number: Optional[str] = None
     
     subscriptions: CreateBusinessSubscription
+    
+    recaptcha_token: str
 
 ## response schemas
 class BusinessResponse(BaseModel):

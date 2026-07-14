@@ -10,6 +10,7 @@ class UserRegisterRequest(BaseModel):
     last_name: str
     email: EmailStr
     phone: Optional[str] = None
+    recaptcha_token: str
     # role: UserRole
     # bio: str
     # password: Optional[str] = None
@@ -90,6 +91,7 @@ class VerifyOTPRequest(BaseModel):
 
 class ResendOTPRequest(BaseModel):
     phone: str
+    recaptcha_token: str
     
 class LoginRequest(BaseModel):
     phone: str

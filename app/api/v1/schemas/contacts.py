@@ -10,7 +10,7 @@ class ContactBase(BaseModel):
     message: Optional[str]
     
 class ContactCreate(ContactBase):
-    pass 
+    recaptcha_token: str
 
 class ContactResponse(ContactBase):
     id: int 

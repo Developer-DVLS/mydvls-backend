@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.schemas.contacts import ContactCreate, ContactResponse, PaginatedContactResponse
 from app.core.database import get_db
 from app.models.contacts import Contact
+from app.services.recaptchaservice import RecaptchaService
 from app.utils.pagination import get_paginated_result
 from app.utils.limiter import limiter
 
@@ -17,6 +18,11 @@ async def create_contact(
     data: ContactCreate,
     db: AsyncSession = Depends(get_db)
 ):
+    await RecaptchaService.verify(
+        token=data.recaptcha_token,
+        action="contact"
+    )
+        
     contact = Contact(
         first_name = data.first_name, 
         last_name = data.last_name or None,

@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User, UserRole, UserStatus
 from app.services.otpservice import OTPService
+from app.services.recaptchaservice import RecaptchaService
 from app.services.security import authenticate_user, create_access_token, create_email_verification_token, create_refresh_token, decode_access_token, get_current_user, get_refresh_token_from_cookie, hash_password, verify_password
 from app.services.smsservice import send_message
 from app.utils.cache import get_cache
@@ -21,7 +22,12 @@ from app.utils.limiter import limiter
 user_router = APIRouter(prefix="/users", tags=['User auth'])
 
 @user_router.post("/register/", response_model=UserResponse)
-async def user_register(background_tasks: BackgroundTasks, data:UserRegisterRequest , db:  AsyncSession = Depends(get_db)):
+async def user_register(
+    request: Request,
+    background_tasks: BackgroundTasks, 
+    data:UserRegisterRequest , 
+    db:  AsyncSession = Depends(get_db)
+):
     """ 
     User registration: Creates new user.
     
@@ -32,6 +38,11 @@ async def user_register(background_tasks: BackgroundTasks, data:UserRegisterRequ
     
     Returns new user.
     """
+    await RecaptchaService.verify(
+        token=data.recaptcha_token,
+        action="register"
+    )
+    
     try:
         # Check if email already exists
         existing_user = await db.execute(
@@ -156,6 +167,11 @@ async def resend_otp(
     request: Request,
     data:ResendOTPRequest
 ):
+    await RecaptchaService.verify(
+        token=data.recaptcha_token,
+        action="resend-otp"
+    )
+        
     # verify phone
     if not is_valid_phone(data.phone):
             raise HTTPException(
