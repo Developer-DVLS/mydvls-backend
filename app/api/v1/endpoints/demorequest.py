@@ -47,11 +47,11 @@ async def create_demo_request(
     await db.refresh(demo_request)
     
     #send team alert
-    await team_alert(
-        title="DEMO REQUEST ALERT -MYDVLS",
-        monitor="Demo request application in Mydvls. Review it ASAP.",
-        monitor_url="https://mydvls.chowchownow.com/"
-    )
+    # await team_alert(
+    #     title="DEMO REQUEST ALERT -MYDVLS",
+    #     monitor="Demo request application in Mydvls. Review it ASAP.",
+    #     monitor_url="https://mydvls.chowchownow.com/"
+    # )
     
     return {
         "status": True,
