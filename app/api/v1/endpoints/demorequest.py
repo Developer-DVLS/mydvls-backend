@@ -23,10 +23,10 @@ async def create_demo_request(
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
-    # await RecaptchaService.verify(
-    #     token=data.recaptcha_token,
-    #     action="demorequest"
-    # )
+    await RecaptchaService.verify(
+        token=data.recaptcha_token,
+        action="demorequest"
+    )
     
     demo_request = DemoRequest(
         user_id = current_user.id if current_user else None,
@@ -46,12 +46,12 @@ async def create_demo_request(
     await db.commit()
     await db.refresh(demo_request)
     
-    #send team alert
-    # await team_alert(
-    #     title="DEMO REQUEST ALERT -MYDVLS",
-    #     monitor="Demo request application in Mydvls. Review it ASAP.",
-    #     monitor_url="https://mydvls.chowchownow.com/"
-    # )
+    # send team alert
+    await team_alert(
+        title="DEMO REQUEST ALERT -MYDVLS",
+        monitor="Demo request application in Mydvls. Review it ASAP.",
+        monitor_url="https://mydvls.chowchownow.com/"
+    )
     
     return {
         "status": True,
