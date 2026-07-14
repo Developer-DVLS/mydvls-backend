@@ -169,7 +169,7 @@ async def resend_otp(
 ):
     await RecaptchaService.verify(
         token=data.recaptcha_token,
-        action="resend-otp"
+        action="resend_otp"
     )
         
     # verify phone

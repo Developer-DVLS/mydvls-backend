@@ -40,7 +40,7 @@ async def register_business(
     # reCptcha
     await RecaptchaService.verify(
         token=payload.recaptcha_token,
-        action="register-business"
+        action="register_business"
     )
     
     business_service = BusinessService(db=db)
