@@ -13,6 +13,9 @@ async def team_alert(
 ):
     url = settings.TEAMS_ALERT_URL
     secret = settings.TEAMS_ALERT_SECRET
+    
+    print("url", url)
+    print("secret", secret)
 
     payload={
             "title": title,
