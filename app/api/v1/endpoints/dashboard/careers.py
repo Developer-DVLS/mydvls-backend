@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,16 +7,24 @@ from app.core.database import get_db
 from app.models.careers import Career
 from app.models.user import User
 from app.auth.permissions import staff_only
+from app.services.recaptchaservice import RecaptchaService
 from app.utils.pagination import get_paginated_result
 
 career_router = APIRouter(prefix="/career", tags=['Career'])
 admin_career_router = APIRouter(prefix="/dashboard/career", tags=['Admin Career CRUD'])
 
 @career_router.post("/")
+# @limiter.limit("3/hour; 5/day")
 async def create_career(
+    request: Request,
     data: CreateCareer,
     db: AsyncSession = Depends(get_db)
 ):
+    await RecaptchaService.verify(
+        token=data.recaptcha_token,
+        action="career"
+    )
+    
     career = Career(
         full_name = data.full_name, 
         email = data.email.lower(), 

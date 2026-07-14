@@ -23,6 +23,7 @@ class CareerBase(BaseModel):
     qna: Optional[List[CareerQnA]] = []
     
 class CreateCareer(CareerBase):
+    recaptcha_token: str
     pass 
 
 class CareerResponse(CareerBase):
