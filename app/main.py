@@ -68,10 +68,10 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Add Gzip middleware to the application
-# app.add_middleware(
-#     GZipMiddleware, 
-#     minimum_size=1000  # Only compress responses larger than 1,000 bytes (1 KB)
-# )
+app.add_middleware(
+    GZipMiddleware, 
+    minimum_size=1000  # Only compress responses larger than 1,000 bytes (1 KB)
+)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
