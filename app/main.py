@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from slowapi.errors import RateLimitExceeded
 from slowapi import  _rate_limit_exceeded_handler
 
+from fastapi.middleware.gzip import GZipMiddleware
+
 from app.core.config import settings
 from app.core.database import engine, Base
 from app import models
@@ -60,8 +62,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# rate limiter
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Add Gzip middleware to the application
+# app.add_middleware(
+#     GZipMiddleware, 
+#     minimum_size=1000  # Only compress responses larger than 1,000 bytes (1 KB)
+# )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
