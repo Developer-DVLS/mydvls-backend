@@ -1239,7 +1239,7 @@ class CartService:
 
             if not coupon_offer:
                 cart.coupon_id = None
-                cart.remove_coupon = True
+                cart.remove_coupon = False
                 cart.coupon_applied = True
                 cart.coupon_applicable = False
                 cart.coupon_message = "Invalid coupon code."
@@ -1369,16 +1369,16 @@ class CartService:
                 return cart['coupon_id']
             return 0
     
-    async def get_coupon_applied_bool_from_cache(self, request):
-        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
-        if not redis_cache_key:
-            return
-        cart = await get_cache(redis_cache_key)
+    # async def get_coupon_applied_bool_from_cache(self, request):
+    #     redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
+    #     if not redis_cache_key:
+    #         return
+    #     cart = await get_cache(redis_cache_key)
         
-        if cart and 'remove_coupon' in cart and cart.get('remove_coupon'):            
-                return cart['remove_coupon']
+    #     if cart and 'remove_coupon' in cart and cart.get('remove_coupon'):            
+    #             return cart['remove_coupon']
         
-        return None
+    #     return None
     
     async def add_applied_coupon(self, request, db, user_id, coupon, cart):
         # if user is logged in add coupon to cart
