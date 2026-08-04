@@ -11,6 +11,7 @@ from app.api.v1.schemas.orders import OrderCreate
 from app.models.carts import CartProduct
 from app.models.offers import Offer
 from app.models.orders import AppliedCombo, Order, OrderItem
+from app.models.products import Product, ProductVariant
 from app.models.user import User, UserRole
 from app.services.cartservice import CartService
 from app.services.userservice import UserService
@@ -32,10 +33,10 @@ class OrderService:
         - Logged-in user
         - Guest user
         """
-
         user_service = UserService(self.db)
         cart_service = CartService()
         cart = None
+        is_guest = False if user else True
         
         # Get cart
         cart = await cart_service.get_cart(
@@ -48,12 +49,12 @@ class OrderService:
         cart = cart_service.normalize_cart(cart)
             
         if not cart.cart_products:
-            raise ValueError("Cart is Empty")
-        
+            raise HTTPException(status_code=400, detail="Cart is empty")
+
         # inventory check
         for cart_product in cart.cart_products:
             try:
-                cart_service.check_stock(
+                await cart_service.check_stock(
                     self.db, 
                     cart_product.product_variant_id, 
                     cart_product.quantity
@@ -64,53 +65,27 @@ class OrderService:
                     detail=e.detail["message"]
                 )
         
-        # validate user auth
-        if not user:
-            # create guest user
-            user = await user_service.create_guest_user(
-                data.receiver_first_name,
-                data.receiver_last_name,
-                data.receiver_email,
-                data.receiver_phone
-            )
-            
-            # assign cart to guest-user
-            # sync session cart
-            cart = await cart_service.cart_sync_on_login(request, response, self.db, user.id) 
-            if not cart:
-                raise ValueError("Cart is Empty")
-            
-            # # normalize
-            # cart = cart_service.normalize_cart(cart)
-                        
-        if cart.coupon_id:
+        coupon_code = None
+        coupon = None
+        if user and cart.coupon_id:
             coupon_result = await self.db.execute(
-                select(Offer)
-                .where(Offer.id == cart.coupon_id)
+                select(Offer).where(Offer.id == cart.coupon_id)
             )
             coupon = coupon_result.scalars().first()
-            enriched_cart = await cart_service.enrich_cart(
-                    request=request,
-                    response=response,
-                    db=self.db,
-                    user_id=user.id,
-                    cart=cart,
-                    coupon_code=coupon.code,
-                    remove_coupon=False
-                )
-        else:
-            enriched_cart = await cart_service.enrich_cart(
-                    request=request,
-                    response=response,
-                    db=self.db,
-                    user_id=user.id,
-                    cart=cart,
-                    coupon_code=None,
-                    remove_coupon=True
-                )
+            coupon_code = coupon.code if coupon else None
 
+        enriched_cart = await cart_service.enrich_cart(
+            request=request,
+            response=response,
+            db=self.db,
+            user_id=user.id if user else None,
+            cart=cart,
+            coupon_code=coupon_code,
+            remove_coupon=coupon_code is None,
+        )
+        
         # if any bogo-offer exists: create a cart-product for free item
-        if enriched_cart.bogo_offer_exists:
+        if user and enriched_cart.bogo_offer_exists:       
             for cart_product in enriched_cart.cart_products:
                 if cart_product.bogo_free_item:
                     item = CartProduct(
@@ -124,11 +99,21 @@ class OrderService:
                     )
                     self.db.add(item)
             # await self.db.refresh(item)
-
+            
+            
+        # validate user auth
+        if not user:
+            # create guest user
+            user = await user_service.create_guest_user(
+                data.receiver_first_name,
+                data.receiver_last_name,
+                data.receiver_email,
+                data.receiver_phone
+            )
         # Create order
         order = Order(
             user_id = user.id,
-            cart_id = cart.id,
+            cart_id = None if is_guest else cart.id ,
             coupon_id = cart.coupon_id or None,
             order_number = str(uuid.uuid4()),
             subtotal = enriched_cart.subtotal,
@@ -148,7 +133,7 @@ class OrderService:
             state = data.state,
             postal_code = data.postal_code,
             country = data.country,
-            latitude = data.longitude,
+            latitude = data.latitude,
             longitude = data.longitude,
             delivery_distance = None,
             payment_status="pending"
@@ -156,24 +141,60 @@ class OrderService:
 
         self.db.add(order)
         await self.db.flush()  # Generates order.id
+        
 
-        # Get cart items
-        items_result = await self.db.execute(
-            select(CartProduct)
-            .where(CartProduct.cart_id == cart.id)
-        )
-        cart_items = items_result.scalars().all()
+        if not is_guest:
+            # Get cart items
+            items_result = await self.db.execute( 
+                                                select(CartProduct) 
+                                                .where(CartProduct.cart_id == cart.id) ) 
+            cart_items = items_result.scalars().all()
+            # Create order items
+            for item in cart_items:
+                order_item = OrderItem( 
+                                    order_id=order.id, 
+                                    product_variant_id=item.product_variant_id, 
+                                    quantity=item.quantity, 
+                                    unit_price=item.unit_price, 
+                                    total_price=item.unit_price * item.quantity, 
+                                    ) 
+                self.db.add(order_item)
+        else:
+            redis_cart = await cart_service.get_redis_cart(request)
+            redis_items = redis_cart.get("cart_products")
 
-        # Create order items
-        for item in cart_items:
-            order_item = OrderItem(
-                order_id=order.id,
-                product_variant_id=item.product_variant_id,
-                quantity=item.quantity,
-                unit_price=item.unit_price,
-                total_price=item.unit_price * item.quantity,
+            if not redis_items:
+                raise HTTPException(status_code=400, detail="Cart is empty")
+            
+            variant_ids = [item["product_variant_id"] for item in redis_items]
+
+            # Single batched query instead of one query per item
+            result = await self.db.execute(
+                select(ProductVariant)
+                .join(ProductVariant.product)
+                .options(selectinload(ProductVariant.product).selectinload(Product.category))
+                .where(
+                    ProductVariant.id.in_(variant_ids),
+                    ProductVariant.is_active == True,
+                    ProductVariant.deleted_at.is_(None),
+                    Product.is_active == True,
+                    Product.deleted_at.is_(None),
+                )
             )
-            self.db.add(order_item)
+            variants_by_id = {v.id: v for v in result.scalars().all()}
+
+            for item in redis_items:
+                variant = variants_by_id.get(item["product_variant_id"])
+                if not variant:
+                    raise HTTPException(status_code=400, detail="Invalid product_variant_id.")
+
+                self.db.add(OrderItem(
+                    order_id=order.id,
+                    product_variant_id=variant.id,
+                    quantity=item["quantity"],
+                    unit_price=variant.price,
+                    total_price=variant.price * item["quantity"],
+                ))
         
         # Assign combo-offer to order if any applied
         if enriched_cart.combo_offers:
@@ -185,7 +206,7 @@ class OrderService:
                     discount_amount = combo_offer["discount"]
                 )
                 self.db.add(applied_combo)
-
+        
         await self.db.commit()
         await self.db.refresh(order)
         
@@ -194,7 +215,9 @@ class OrderService:
             .options(
                 selectinload(Order.user),
                 selectinload(Order.cart),
+                selectinload(Order.items),
                 selectinload(Order.items)
+                .selectinload(OrderItem.product_variant)
             )
             .where(Order.id == order.id)
         )

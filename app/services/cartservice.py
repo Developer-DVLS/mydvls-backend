@@ -2,6 +2,7 @@ from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 import json
+from typing import Optional
 import uuid
 from fastapi import HTTPException, Request, Response
 from sqlalchemy import and_, delete, func, select
@@ -787,7 +788,7 @@ class CartService:
         request: Request,
         response: Response,
         db: AsyncSession, 
-        user_id: int
+        user_id: Optional[int] = None
     ):
         # get redis cache key from cookie
         redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)

@@ -23,6 +23,8 @@ from app.utils.cache import delete_cache, get_cache
 
 order_router = APIRouter(prefix="/order", tags=['order'])
 
+SESSION_COOKIE_KEY = "guest_cart"
+
 @order_router.post("/")
 async def create_order(
     data: OrderCreate,
@@ -65,10 +67,21 @@ async def create_order(
         order.payment_intent_id = result["transactionId"]
         order.payment_status = "paid"
         order.payment_method = "authorizenet"
-        
+                
         #4. update cart status
-        order.cart.status = CartStatus.ORDERED
-        
+        # if cart exists in order, it means it is registered user's order else guest user
+        # so delete redis cart
+        if order.cart_id:
+            order.cart.status = CartStatus.ORDERED
+        else:
+            # get redis cache key from cookie
+            redis_cache_key = request.cookies.get(SESSION_COOKIE_KEY)
+            if redis_cache_key:
+                # delete cart from redis cache
+                await delete_cache(redis_cache_key)
+                # delete cart cookie
+                response.delete_cookie(key=SESSION_COOKIE_KEY)
+
         #5. update inventory
         for ordered_item in order.items:
             product_variant = ordered_item.product_variant

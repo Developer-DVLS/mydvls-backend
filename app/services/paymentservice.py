@@ -31,7 +31,7 @@ class PaymentService:
                         }
                     },
                     "order": {
-                        "invoiceNumber": payment["order_number"]
+                        "invoiceNumber": str(payment["order_number"])[:20]
                     },
                     "customer": {
                         "email": payment["receiver_email"]
@@ -58,6 +58,12 @@ class PaymentService:
         tx = data.get("transactionResponse", {})
 
         if tx.get("responseCode") != "1":
+            if tx.get("responseCode") == "4":
+                raise HTTPException(
+                    status_code=402, 
+                    detail="Transaction is held for manual fraud review."
+                    )
+            
             error_text = (
                 tx.get("errors", [{}])[0].get("errorText")
                 or tx.get("messages", [{}])[0].get("description")
