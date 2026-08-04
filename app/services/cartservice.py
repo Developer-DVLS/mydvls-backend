@@ -1248,6 +1248,12 @@ class CartService:
         else:
             #get coupon id from session/ db
             coupon_id = await self.get_applied_coupon(request, db, user_id)
+            if not coupon_id:
+                cart.coupon_applied = False
+                cart.coupon_applicable = False
+                cart.coupon_message = "No coupon applied."
+
+                return cart
             
             #check coupon validity
             result = await db.execute(
