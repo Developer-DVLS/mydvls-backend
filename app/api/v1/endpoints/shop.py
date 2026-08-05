@@ -116,119 +116,173 @@ async def shop_products_list(
     db: AsyncSession = Depends(get_db),
 ):
     
-    # check cache
+    # ---------------------------------------------------------
+    # 1. Get complete product data from cache
+    # ---------------------------------------------------------
     cached_data = await get_cache(PRODUCT_CACHE_KEY)
 
-    if not cached_data:
-        query = select(Product).options(
+    if cached_data:
+        products_data = json.loads(cached_data)
+
+    else:
+        # -----------------------------------------------------
+        # 2. Cache miss -> get ALL active products
+        #    IMPORTANT: Do NOT apply search/category/featured
+        #    filters here.
+        # -----------------------------------------------------
+        query = (
+            select(Product)
+            .options(
                 selectinload(Product.variants)
-            ).where(
+                .selectinload(ProductVariant.images)
+            )
+            .where(
                 Product.deleted_at.is_(None),
-                Product.is_active == True,
-                Product.variants.any(ProductVariant.is_active == True)
-            ).order_by(
-                Product.created_at.desc()
+                Product.is_active.is_(True),
+                Product.variants.any(
+                    ProductVariant.is_active.is_(True)
                 )
+            )
+            .order_by(Product.created_at.desc())
+        )
 
-        if search:
-            query = query.where(Product.name.ilike(f"%{search}%"))
+        result = await db.execute(query)
 
-        if category_id is not None:
-            query = query.where(Product.category_id == category_id)
+        products = result.scalars().unique().all()
 
-        if is_featured is not None:
-            query = query.where(Product.is_featured == is_featured)
-
-        result = await db.execute(query.options(
-            selectinload(Product.variants).selectinload(ProductVariant.images)
-        ))
-        products = result.scalars().all()
-        
-        # first get all active offers
+        # -----------------------------------------------------
+        # 3. Get active offers
+        # -----------------------------------------------------
         offers = await get_all_active_offers(db)
-        
-        # Build indexes
-        bogo_map, item_map, category_map, store_offer = build_offer_indexes(offers)
 
-        # 4. Attach best offer per product
-        # -------------------------
-        response = []
+        bogo_map, item_map, category_map, store_offer = (
+            build_offer_indexes(offers)
+        )
 
-        for p in products:
-            
-            applicable_offer = shop_service.collect_applicable_offers( 
-                p,
+        # -----------------------------------------------------
+        # 4. Build complete product response
+        # -----------------------------------------------------
+        products_data = []
+
+        for product in products:
+
+            # Only active variants
+            active_variants = [
+                variant
+                for variant in product.variants
+                if variant.is_active
+            ]
+
+            if not active_variants:
+                continue
+
+            # -------------------------------------------------
+            # Best applicable offer
+            # -------------------------------------------------
+            applicable_offers = shop_service.collect_applicable_offers(
+                product,
                 item_map,
                 category_map,
                 store_offer
             )
-            
-            best_offer = shop_service.pick_best_offer(applicable_offer)
+
+            best_offer = shop_service.pick_best_offer(
+                applicable_offers
+            )
 
             best_offer_data = None
+
             if best_offer:
                 best_offer_data = {
-                        "id": best_offer.id,
-                        "name": best_offer.name,
-                        "code": best_offer.code,
-                        "type": best_offer.type,
-                        "discount_type": best_offer.discount_type,
-                        "discount_value":best_offer.discount_value
-                    }
-                
-            # get image-url
+                    "id": best_offer.id,
+                    "name": best_offer.name,
+                    "code": best_offer.code,
+                    "type": best_offer.type,
+                    "discount_type": best_offer.discount_type,
+                    "discount_value": best_offer.discount_value,
+                }
+
+            # -------------------------------------------------
+            # Get price from active variants
+            # -------------------------------------------------
+            price = min(
+                variant.price
+                for variant in active_variants
+            )
+
+            # -------------------------------------------------
+            # Get image from active variants
+            # -------------------------------------------------
             image_url = None
-            for variant in p.variants:
+
+            for variant in active_variants:
                 if variant.images:
                     image_url = variant.images[0].image_url
                     break
-            
-            response.append({
-                "id": p.id,
-                "name": p.name,
-                "description": p.description,
-                "is_featured": p.is_featured,
-                "price": str(p.variants[0].price )if p.variants else 0,
+
+            products_data.append({
+                "id": product.id,
+                "name": product.name,
+                "description": product.description,
+                "is_featured": product.is_featured,
+                "price": str(price),
                 "image_url": image_url,
-                "category_id": p.category_id,
-                "best_offer": best_offer_data
+                "category_id": product.category_id,
+                "best_offer": best_offer_data,
             })
-            
-        # save cache
+
+        # -----------------------------------------------------
+        # 5. Cache the COMPLETE unfiltered product list
+        # -----------------------------------------------------
         await set_cache(
             PRODUCT_CACHE_KEY,
-            json.dumps(response),
-            expire=900  # 15 mins
+            json.dumps(products_data),
+            expire=900  # 15 minutes
         )
-        
-        return {
-            "total": len(products),
-            "skip": skip,
-            "limit": limit,
-            "data": response,
-        }
-    
-    # if cache exists with filters then
-    filtered = json.loads(cached_data)
+
+    # ---------------------------------------------------------
+    # 6. Apply filters AFTER getting complete cached data
+    # ---------------------------------------------------------
+    filtered = products_data
+
+    # Search
     if search:
+        search_value = search.strip().lower()
+
         filtered = [
-            p for p in filtered
-            if search.lower() in p["name"].lower()
+            product
+            for product in filtered
+            if search_value in product["name"].lower()
         ]
+
+    # Category
     if category_id is not None:
         filtered = [
-            p for p in filtered
-            if p["category_id"] == category_id
+            product
+            for product in filtered
+            if product["category_id"] == category_id
         ]
+
+    # Featured
     if is_featured is not None:
         filtered = [
-            p for p in filtered
-            if p.get("is_featured") == is_featured
+            product
+            for product in filtered
+            if product["is_featured"] == is_featured
         ]
-    
-    #paginate and return
+
+    # ---------------------------------------------------------
+    # 7. Pagination AFTER filtering
+    # ---------------------------------------------------------
     total = len(filtered)
-    paginated = filtered[skip: skip + limit]
+
+    paginated = filtered[
+        skip: skip + limit
+    ]
+
+    # ---------------------------------------------------------
+    # 8. Return response
+    # ---------------------------------------------------------
     return {
         "total": total,
         "skip": skip,
