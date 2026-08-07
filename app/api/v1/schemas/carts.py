@@ -106,6 +106,7 @@ class CartBOGOFreeItem(BaseModel):
     product_variant_id: int
     quantity: int
     unit_price: Optional[float] = 0
+    discount_amount: Optional[float] = 0
     # product_variant: Optional[ProductVariantResponse] = None
     
     class Config:

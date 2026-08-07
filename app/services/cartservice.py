@@ -1003,10 +1003,12 @@ class CartService:
                                 cart_product_response.bogo_free_item = CartBOGOFreeItem(
                                     product_variant_id=response["get_item_id"],
                                     quantity=response["free_items"],
-                                    unit_price=0 
+                                    unit_price=0 ,
+                                    discount_amount=response["discount"]
                                 )
                         else:
-                            response = self.calculate_cross_item_bogo(
+                            response = await self.calculate_cross_item_bogo(
+                                db,
                                 cart_product_response.offer,
                                 cart_product_response
                             )
@@ -1015,7 +1017,8 @@ class CartService:
                                 cart_product_response.bogo_free_item =  CartBOGOFreeItem(
                                     product_variant_id=response["get_item_id"],
                                     quantity=response["free_items"],
-                                    unit_price=0 
+                                    unit_price=0 ,
+                                    discount_amount=response["discount"]
                                 )
 
                         # add bogo get item data
@@ -1218,33 +1221,55 @@ class CartService:
         return discount_amount
     
     #coupon validation
+    async def coupon_validity(self, coupon_offer, cart):
+        now = datetime.utcnow()
+        
+        if not coupon_offer:
+            cart.coupon_id = None
+            cart.remove_coupon = False
+            cart.coupon_applied = True
+            cart.coupon_applicable = False
+            cart.coupon_message = "Coupon code does not exist."
+        elif not coupon_offer.is_active:
+            cart.coupon_id = None
+            cart.remove_coupon = False
+            cart.coupon_applied = True
+            cart.coupon_applicable = False
+            cart.coupon_message = "This coupon is inactive."
+        elif coupon_offer.start_date > now:
+            cart.coupon_id = None
+            cart.remove_coupon = False
+            cart.coupon_applied = True
+            cart.coupon_applicable = False
+            cart.coupon_message = "This coupon is not yet active."
+        elif coupon_offer.end_date < now:
+            cart.coupon_id = None
+            cart.remove_coupon = False
+            cart.coupon_applied = True
+            cart.coupon_applicable = False
+            cart.coupon_message = "This coupon has expired."
+        else:
+            return cart
+        
+        return cart
+    
     async def coupon_validation(self, request, db, cart, coupon_code, user_id):
         now = datetime.utcnow()
         
         # get coupon with this coupon code when first applied
         if coupon_code:
             result = await db.execute(
-                select(Offer)
-                .where(
+                select(Offer).where(
                     Offer.type == OfferType.COUPON,
                     Offer.code == coupon_code,
-                    Offer.is_active == True,
-                    Offer.start_date <= now,
-                    Offer.end_date >= now,
                     Offer.deleted_at.is_(None)
                 )
-
             )
             coupon_offer = result.scalars().first()
 
-            if not coupon_offer:
-                cart.coupon_id = None
-                cart.remove_coupon = False
-                cart.coupon_applied = True
-                cart.coupon_applicable = False
-                cart.coupon_message = "Invalid coupon code."
+            cart = self.coupon_validity(coupon_offer, cart)
 
-                return cart
+            return cart
         else:
             #get coupon id from session/ db
             coupon_id = await self.get_applied_coupon(request, db, user_id)
@@ -1269,12 +1294,7 @@ class CartService:
             )
             coupon_offer = result.scalars().first()
             
-            if not coupon_offer:
-                cart.coupon_applied = True
-                cart.coupon_applicable = False
-                cart.coupon_message = "Invalid coupon code."
-
-                return cart
+            cart = self.coupon_validity(coupon_offer, cart)
         
         # minimum spent amount validation
         if cart.subtotal < coupon_offer.min_spent_amount:
@@ -1547,13 +1567,22 @@ class CartService:
             "get_item_id": bogo.get_item_id
         }
         
-    def calculate_cross_item_bogo(self, offer, cart_product_response):
+    async def calculate_cross_item_bogo(self, db, offer, cart_product_response):
         bogo = offer.bogo_meta
         
-        buy_item = cart_product_response.offer.bogo_meta.buy_item_id 
-        get_item = cart_product_response.offer.bogo_meta.get_item_id
+        buy_item_quantity = cart_product_response.offer.bogo_meta.buy_quantity 
+        get_item_quantity = cart_product_response.offer.bogo_meta.get_quantity
+        get_item_result = await db.execute(
+            select(ProductVariant)
+            .where(
+                ProductVariant.id == cart_product_response.offer.bogo_meta.get_item_id,
+                ProductVariant.deleted_at.is_(None)
+                )
+        )
+        get_item = get_item_result.scalars().first()
+        get_item_unit_price = get_item.price  if get_item else 0
         
-        if not buy_item or not get_item:
+        if not buy_item_quantity or not get_item_quantity:
             return {
                 "free_items": 0,
                 "discount": 0,
@@ -1562,16 +1591,16 @@ class CartService:
         } 
 
         # 3. Calculate eligible BOGO sets
-        eligible_sets = buy_item.quantity // bogo.buy_quantity
+        eligible_sets = buy_item_quantity // bogo.buy_quantity
 
         # 4. Total eligible free quantity from offer
         eligible_free_qty = eligible_sets * bogo.get_quantity
 
         # 5. Cap by actual cart quantity of get item
-        free_qty = min(get_item.quantity, eligible_free_qty)
+        free_qty = min(get_item_quantity, eligible_free_qty)
 
         # 6. Calculate discount value (important for totals)
-        discount = float(get_item.unit_price) * free_qty
+        discount = float(get_item_unit_price) * free_qty
 
         return {
             "free_items": free_qty,
