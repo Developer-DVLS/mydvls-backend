@@ -990,7 +990,7 @@ class CartService:
                         cart_product_response.discounted_amount = discounted_amount
                     # handle bogo offer accordingly
                     elif cart_product_response.offer.type == OfferType.BOGO:
-                        if cart_product_response.quantity <= cart_product_response.offer.bogo_meta.buy_quantity:
+                        if cart_product_response.quantity_after_combo < cart_product_response.offer.bogo_meta.buy_quantity:
                             cart_product_response.offer = None
                             continue
                         
@@ -1012,7 +1012,7 @@ class CartService:
                                 cart_product_response.offer,
                                 cart_product_response
                             )
-                            
+                            print("response!!!!", response)
                             if response["free_items"] > 0:
                                 cart_product_response.bogo_free_item =  CartBOGOFreeItem(
                                     product_variant_id=response["get_item_id"],
@@ -1570,7 +1570,7 @@ class CartService:
     async def calculate_cross_item_bogo(self, db, offer, cart_product_response):
         bogo = offer.bogo_meta
         
-        buy_item_quantity = cart_product_response.offer.bogo_meta.buy_quantity 
+        buy_item_quantity = cart_product_response.quantity_after_combo
         get_item_quantity = cart_product_response.offer.bogo_meta.get_quantity
         get_item_result = await db.execute(
             select(ProductVariant)
@@ -1594,10 +1594,10 @@ class CartService:
         eligible_sets = buy_item_quantity // bogo.buy_quantity
 
         # 4. Total eligible free quantity from offer
-        eligible_free_qty = eligible_sets * bogo.get_quantity
+        free_qty = eligible_sets * bogo.get_quantity
 
         # 5. Cap by actual cart quantity of get item
-        free_qty = min(get_item_quantity, eligible_free_qty)
+        # free_qty = min(get_item_quantity, eligible_free_qty)
 
         # 6. Calculate discount value (important for totals)
         discount = float(get_item_unit_price) * free_qty
