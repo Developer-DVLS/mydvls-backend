@@ -187,6 +187,8 @@ async def get_invoice(
             "quantity": item.quantity,
             "combo_quantity": 0,
             "normal_quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "total_price": item.total_price,
             "product_variant": {
                 "id": item.product_variant.id,
                 "sku": item.product_variant.sku,
