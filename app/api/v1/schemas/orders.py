@@ -67,7 +67,9 @@ class OrderResponse(OrderBase):
         "completed_at",
         "cancelled_at"
         )
-    def serialize_created_at(self, value: datetime) -> str:
+    def serialize_created_at(self, value: datetime) -> Optional[str]:
+        if value is None:
+            return None
         if value.tzinfo is None:
             value = value.replace(tzinfo=timezone.utc)
 
@@ -122,7 +124,9 @@ class OrderDetailResponse(OrderBase):
         "completed_at",
         "cancelled_at"
         )
-    def serialize_created_at(self, value: datetime) -> str:
+    def serialize_created_at(self, value: datetime) -> Optional[str]:
+        if value is None:
+            return None
         if value.tzinfo is None:
             value = value.replace(tzinfo=timezone.utc)
 
