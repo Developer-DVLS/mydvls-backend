@@ -96,7 +96,7 @@ async def create_order(
         
         
         # 6. send order placed email / sms
-        result = await db.execute(
+        order_result = await db.execute(
             select(Order)
             .options(
                 selectinload(Order.user),
@@ -107,7 +107,7 @@ async def create_order(
             )
             .where(Order.id == order.id)
         )
-        order = result.scalar_one_or_none()
+        order = order_result.scalar_one_or_none()
 
         ordered_items = [
             {
@@ -120,7 +120,7 @@ async def create_order(
             for item in order.items
         ]
         await send_email(background_tasks=background_tasks,
-                     subject="Forgot Password Link",
+                     subject="Order Placed successfully.",
                      recipients=[order.receiver_email],
                      template_name='order/placed.html',
                      context={
