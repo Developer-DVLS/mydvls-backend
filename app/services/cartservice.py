@@ -1059,31 +1059,31 @@ class CartService:
                                     response
                                     )
 
-                        # # add bogo get item data
-                        # get_item_result = await db.execute(
-                        #     select(ProductVariant)
-                        #     .options(selectinload(ProductVariant.product).selectinload(Product.category),
-                        #             selectinload(ProductVariant.images)
-                        #             )
-                        #     .where(
-                        #         ProductVariant.id == cart_product_response.offer.bogo_meta.get_item_id,
-                        #         ProductVariant.deleted_at.is_(None)
-                        #         )
-                        # )
-                        # get_item = get_item_result.scalars().first()
-                        # cart_product_response.offer.bogo_meta.get_item = CartGetItem(
-                        #     id=get_item.id,
-                        #     sku=get_item.sku,
-                        #     price=get_item.price,
-                        #     image=get_item.images[0].image_url if get_item.images else None,
-                        #     product = CartGetItemProduct(
-                        #         id=get_item.product.id,
-                        #         name=get_item.product.name,
-                        #         description=get_item.product.description,
-                        #         category_id=get_item.product.category_id,
-                        #         category_name=get_item.product.category.name
-                        #     )
-                        # )
+                        # add bogo get item data
+                        get_item_result = await db.execute(
+                            select(ProductVariant)
+                            .options(selectinload(ProductVariant.product).selectinload(Product.category),
+                                    selectinload(ProductVariant.images)
+                                    )
+                            .where(
+                                ProductVariant.id == cart_product_response.offer.bogo_meta.get_item_id,
+                                ProductVariant.deleted_at.is_(None)
+                                )
+                        )
+                        get_item = get_item_result.scalars().first()
+                        cart_product_response.offer.bogo_meta.get_item = CartGetItem(
+                            id=get_item.id,
+                            sku=get_item.sku,
+                            price=get_item.price,
+                            image=get_item.images[0].image_url if get_item.images else None,
+                            product = CartGetItemProduct(
+                                id=get_item.product.id,
+                                name=get_item.product.name,
+                                description=get_item.product.description,
+                                category_id=get_item.product.category_id,
+                                category_name=get_item.product.category.name
+                            )
+                        )
                         
                         # mark boolean for bogo in cart
                         cart.bogo_offer_exists = True

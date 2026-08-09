@@ -9,7 +9,7 @@ from app.api.v1.endpoints.cart import get_cart
 from app.api.v1.schemas.carts import CartResponse
 from app.api.v1.schemas.orders import OrderCreate
 from app.models.carts import CartProduct
-from app.models.offers import Offer
+from app.models.offers import Offer, OfferType
 from app.models.orders import AppliedCombo, Order, OrderItem
 from app.models.products import Product, ProductVariant
 from app.models.user import User, UserRole
@@ -195,6 +195,16 @@ class OrderService:
                     unit_price=variant.price,
                     total_price=variant.price * item["quantity"],
                 ))
+                
+                ## add bogo free item 
+                if redis_cart.get('bogo_offer_exists') and item["offer"] and item["offer"]["type"] == OfferType.BOGO:
+                    self.db.add(OrderItem(
+                        order_id=order.id,
+                        product_variant_id=item["bogo_free_item"]["product_variant_id"],
+                        quantity=item["bogo_free_item"]["quantity"],
+                        unit_price=0,
+                        total_price=0,
+                    ))
         
         # Assign combo-offer to order if any applied
         if enriched_cart.combo_offers:

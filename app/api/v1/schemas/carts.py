@@ -86,7 +86,7 @@ class CartBOGOMeta(BaseModel):
     get_item_id: Optional[int] = None
     get_quantity: int
     apply_to_same_item: bool = True
-    # get_item: Optional[CartGetItem] = None
+    get_item: Optional[CartGetItem] = None
     
     class Config:
         from_attributes = True
