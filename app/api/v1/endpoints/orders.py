@@ -1,7 +1,7 @@
 import json
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 import httpx
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,9 @@ from app.services.cartservice import CartService
 from app.services.orderservice import OrderService
 from app.services.paymentservice import PaymentService
 from app.services.security import get_current_user_optional
+from app.services.smsservice import send_message
 from app.utils.cache import delete_cache, get_cache
+from app.utils.send_email import send_email
 
 order_router = APIRouter(prefix="/order", tags=['order'])
 
@@ -28,6 +30,7 @@ SESSION_COOKIE_KEY = "guest_cart"
 @order_router.post("/")
 async def create_order(
     data: OrderCreate,
+    background_tasks: BackgroundTasks,
     request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
@@ -90,6 +93,46 @@ async def create_order(
         
         await db.commit()
         await db.refresh(order) 
+        
+        
+        # 6. send order placed email / sms
+        result = await db.execute(
+            select(Order)
+            .options(
+                selectinload(Order.user),
+                selectinload(Order.cart),
+                selectinload(Order.items)
+                .selectinload(OrderItem.product_variant)
+                .selectinload(ProductVariant.product)
+            )
+            .where(Order.id == order.id)
+        )
+        order = result.scalar_one_or_none()
+
+        ordered_items = [
+            {
+                "product_name": item.product_variant.product.name,
+                "sku": item.product_variant.sku,
+                "quantity": item.quantity,
+                "unit_price": item.unit_price,
+                "total_price": item.total_price,
+            }
+            for item in order.items
+        ]
+        await send_email(background_tasks=background_tasks,
+                     subject="Forgot Password Link",
+                     recipients=[order.receiver_email],
+                     template_name='order/placed.html',
+                     context={
+                        'order': order,
+                        'ordered_items': ordered_items
+                     }
+                     )
+        
+        message = (f"Order #{str(order.order_number)[-8:]} placed successfully! "
+                   "Your order has been received. "
+                   f"Total: ${order.total}. We'll notify you when it is confirmed.")
+        await send_message(message, order.receiver_phone)
         
         return {
             "order_id": order.id, 
@@ -358,37 +401,37 @@ async def get_invoice(
 
     return invoice
 
-# from app.core.config import settings
-# @order_router.get("get_token")
-# async def get_test_nonce():
-#     payload = {
-#         "securePaymentContainerRequest": {
-#             "merchantAuthentication": {
-#                 "name": settings.API_LOGIN_ID,
-#                 "transactionKey": settings.TRANSACTION_KEY,
-#             },
-#             "data": {
-#                 "type": "TOKEN",
-#                 "id": "test-request-1",
-#                 "token": {
-#                     "cardNumber": "4111111111111111",
-#                     "expirationDate": "1226",
-#                     "cardCode": "123",
-#                 }
-#             }
-#         }
-#     }
+from app.core.config import settings
+@order_router.get("get_token")
+async def get_test_nonce():
+    payload = {
+        "securePaymentContainerRequest": {
+            "merchantAuthentication": {
+                "name": settings.API_LOGIN_ID,
+                "transactionKey": settings.TRANSACTION_KEY,
+            },
+            "data": {
+                "type": "TOKEN",
+                "id": "test-request-1",
+                "token": {
+                    "cardNumber": "4111111111111111",
+                    "expirationDate": "1226",
+                    "cardCode": "123",
+                }
+            }
+        }
+    }
 
-#     async with httpx.AsyncClient() as client:
-#         response = await client.post(settings.ENDPOINT_URL, json=payload)
+    async with httpx.AsyncClient() as client:
+        response = await client.post(settings.ENDPOINT_URL, json=payload)
     
-#     data = response.json()
-#     opaque = data["opaqueData"]
-#     print(opaque["dataDescriptor"])  # use this as opaqueDataDescriptor
-#     print(opaque["dataValue"]) 
+    data = response.json()
+    opaque = data["opaqueData"]
+    print(opaque["dataDescriptor"])  # use this as opaqueDataDescriptor
+    print(opaque["dataValue"]) 
     
-# @order_router.post("/api/charge")
-# async def charge_card(payload: ChargeRequest):
-#     payment_service = PaymentService()
-#     response = await payment_service.charge_card(payment=payload)
-#     return response
+@order_router.post("/api/charge")
+async def charge_card(payload: ChargeRequest):
+    payment_service = PaymentService()
+    response = await payment_service.charge_card(payment=payload)
+    return response

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to DVLS</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #fbeff2;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        width: 100%;
+        max-width: 600px;
+        margin: 20px auto;
+        background: #ffffff;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+      }
+      .header {
+        background-color: #0062fb;
+        text-align: center;
+        padding: 20px;
+      }
+      .header h1 {
+        margin: 0;
+        font-size: 26px;
+        color: #ffffff;
+      }
+      .content {
+        padding: 20px;
+        color: #444444;
+      }
+      .button {
+        display: inline-block;
+        padding: 10px 20px;
+        margin: 20px 0;
+        background-color: #b8366b;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+      }
+      .footer {
+        text-align: center;
+        padding: 10px;
+        font-size: 12px;
+        color: #666;
+        background-color: #f4f4f4;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Your order has been placed</h1>
+      </div>
+      <div class="content">
+        <p>Hi {{ order.receiver_first_name }},</p>
+        <p>Thank you for your order!</p>
+        <p>We’re happy to let you know that your order #{{ order.order_number }}
+          has been successfully placed and received.</p>
+
+        <h2>Order Items</h2>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-top: 20px;">
+          <thead>
+            <tr>
+              <th style="border: 1px solid #ddd; padding: 10px; text-align: left;">Item</th>
+              <th style="border: 1px solid #ddd; padding: 10px; text-align: center;">Quantity</th>
+              <th style="border: 1px solid #ddd; padding: 10px; text-align: right;">Price</th>
+              <th style="border: 1px solid #ddd; padding: 10px; text-align: right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in ordered_items %}
+              <tr>
+                <td style="border: 1px solid #ddd; padding: 10px;">
+                  <p style="margin: 0 0 5px 0;">{{ item.product_name }}</p>
+                  <p style="margin: 0; font-size: 12px; color: #777;">SKU: {{ item.sku }}</p>
+                </td>
+                <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">{{ item.quantity }}</td>
+                <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">$ {{ item.unit_price }}</td>
+                <td style="border: 1px solid #ddd; padding: 10px; text-align: right;">$ {{ item.total_price }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <!-- Order Summary -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-top: 20px;">
+          <tr>
+            <td style="padding: 8px; text-align: right;">Subtotal:</td>
+            <td style="padding: 8px; text-align: right; width: 150px;">$ {{ order.subtotal }}</td>
+          </tr> <tr>
+            <td style="padding: 8px; text-align: right;">Discount:</td>
+            <td style="padding: 8px; text-align: right;">- $ {{ order.discount_amount|default(0) }}</td>
+          </tr> <tr>
+            <td style="padding: 8px; text-align: right;">Shipping Charge:</td>
+            <td style="padding: 8px; text-align: right;">$ {{ order.delivery_charge|default(0) }}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; text-align: right;">Tax Amount:</td>
+            <td style="padding: 8px; text-align: right;">$ {{ order.tax_amount }}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 8px; text-align: right; border-top: 2px solid #ddd;">
+              <strong>Total:</strong>
+            </td> <td style="padding: 12px 8px; text-align: right; border-top: 2px solid #ddd;">
+              <strong>$ {{ order.total }}</strong>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div class="footer">&copy; Delta V Logic and Solutions. All rights reserved.</div>
+    </div>
+  </body>
+</html>

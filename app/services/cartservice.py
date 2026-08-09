@@ -872,7 +872,42 @@ class CartService:
             cart.model_dump(mode="json"),
             expire=self.GUEST_CART_EXPIRY
         )
-
+    
+    async def _assign_free_item(self, db, cart_product_response, response):
+        # add bogo get item data
+        get_item_result = await db.execute(
+            select(ProductVariant)
+            .options(selectinload(ProductVariant.product).selectinload(Product.category),
+                    selectinload(ProductVariant.images)
+                    )
+            .where(
+                ProductVariant.id == cart_product_response.offer.bogo_meta.get_item_id,
+                ProductVariant.deleted_at.is_(None)
+                )
+        )
+        get_item = get_item_result.scalars().first()
+        
+        cart_product_response.bogo_free_item = CartBOGOFreeItem(
+            product_variant_id=response["get_item_id"],
+            quantity=response["free_items"],
+            unit_price=0 ,
+            discount_amount=response["discount"],
+            get_item = CartGetItem(
+                id=get_item.id,
+                sku=get_item.sku,
+                price=get_item.price,
+                image=get_item.images[0].image_url if get_item.images else None,
+                product = CartGetItemProduct(
+                    id=get_item.product.id,
+                    name=get_item.product.name,
+                    description=get_item.product.description,
+                    category_id=get_item.product.category_id,
+                    category_name=get_item.product.category.name
+                )
+            )
+        )
+        
+        return cart_product_response
     
     async def enrich_cart(self,
         request: Request,
@@ -955,11 +990,17 @@ class CartService:
                     continue
                 if cart_product.quantity_after_combo <= 0:
                     continue
-                product_variant = (
-                    ProductVariantResponse(**cart_product.product_variant)
-                    if isinstance(cart_product.product_variant, dict)
-                    else cart_product.product_variant
-                )
+                if cart_product.product_variant:
+                    if isinstance(cart_product.product_variant, dict):
+                        product_variant = ProductVariantResponse(
+                            **cart_product.product_variant
+                        )
+                    else:
+                        product_variant = ProductVariantResponse.model_validate(
+                            cart_product.product_variant
+                        )
+                else:
+                    product_variant = None
                 
                 cart_product_response = await self._attach_offer(
                     db,
@@ -1000,51 +1041,49 @@ class CartService:
                                 cart_product_response
                                 )
                             if response["free_items"] > 0:
-                                cart_product_response.bogo_free_item = CartBOGOFreeItem(
-                                    product_variant_id=response["get_item_id"],
-                                    quantity=response["free_items"],
-                                    unit_price=0 ,
-                                    discount_amount=response["discount"]
-                                )
+                                cart_product_response = await self._assign_free_item(
+                                    db, 
+                                    cart_product_response, 
+                                    response
+                                    )
                         else:
                             response = await self.calculate_cross_item_bogo(
                                 db,
                                 cart_product_response.offer,
                                 cart_product_response
                             )
-                            print("response!!!!", response)
                             if response["free_items"] > 0:
-                                cart_product_response.bogo_free_item =  CartBOGOFreeItem(
-                                    product_variant_id=response["get_item_id"],
-                                    quantity=response["free_items"],
-                                    unit_price=0 ,
-                                    discount_amount=response["discount"]
-                                )
-
-                        # add bogo get item data
-                        get_item_result = await db.execute(
-                            select(ProductVariant)
-                            .options(selectinload(ProductVariant.product).selectinload(Product.category),
-                                    selectinload(ProductVariant.images)
+                                cart_product_response = await self._assign_free_item(
+                                    db, 
+                                    cart_product_response, 
+                                    response
                                     )
-                            .where(
-                                ProductVariant.id == cart_product_response.offer.bogo_meta.get_item_id,
-                                ProductVariant.deleted_at.is_(None)
-                                )
-                        )
-                        get_item = get_item_result.scalars().first()
-                        cart_product_response.offer.bogo_meta.get_item = CartGetItem(
-                            id=get_item.id,
-                            sku=get_item.sku,
-                            price=get_item.price,
-                            image=get_item.images[0].image_url if get_item.images else None,
-                            product = CartGetItemProduct(
-                                id=get_item.product.id,
-                                name=get_item.product.name,
-                                description=get_item.product.description,
-                                category_id=get_item.product.category_id
-                            )
-                        )
+
+                        # # add bogo get item data
+                        # get_item_result = await db.execute(
+                        #     select(ProductVariant)
+                        #     .options(selectinload(ProductVariant.product).selectinload(Product.category),
+                        #             selectinload(ProductVariant.images)
+                        #             )
+                        #     .where(
+                        #         ProductVariant.id == cart_product_response.offer.bogo_meta.get_item_id,
+                        #         ProductVariant.deleted_at.is_(None)
+                        #         )
+                        # )
+                        # get_item = get_item_result.scalars().first()
+                        # cart_product_response.offer.bogo_meta.get_item = CartGetItem(
+                        #     id=get_item.id,
+                        #     sku=get_item.sku,
+                        #     price=get_item.price,
+                        #     image=get_item.images[0].image_url if get_item.images else None,
+                        #     product = CartGetItemProduct(
+                        #         id=get_item.product.id,
+                        #         name=get_item.product.name,
+                        #         description=get_item.product.description,
+                        #         category_id=get_item.product.category_id,
+                        #         category_name=get_item.product.category.name
+                        #     )
+                        # )
                         
                         # mark boolean for bogo in cart
                         cart.bogo_offer_exists = True
@@ -1221,7 +1260,7 @@ class CartService:
         return discount_amount
     
     #coupon validation
-    async def coupon_validity(self, coupon_offer, cart):
+    def coupon_validity(self, coupon_offer, cart):
         now = datetime.utcnow()
         
         if not coupon_offer:
@@ -1230,28 +1269,30 @@ class CartService:
             cart.coupon_applied = True
             cart.coupon_applicable = False
             cart.coupon_message = "Coupon code does not exist."
+            return False, cart
         elif not coupon_offer.is_active:
             cart.coupon_id = None
             cart.remove_coupon = False
             cart.coupon_applied = True
             cart.coupon_applicable = False
             cart.coupon_message = "This coupon is inactive."
+            return False, cart
         elif coupon_offer.start_date > now:
             cart.coupon_id = None
             cart.remove_coupon = False
             cart.coupon_applied = True
             cart.coupon_applicable = False
             cart.coupon_message = "This coupon is not yet active."
+            return False, cart
         elif coupon_offer.end_date < now:
             cart.coupon_id = None
             cart.remove_coupon = False
             cart.coupon_applied = True
             cart.coupon_applicable = False
             cart.coupon_message = "This coupon has expired."
+            return False, cart
         else:
-            return cart
-        
-        return cart
+            return True, cart
     
     async def coupon_validation(self, request, db, cart, coupon_code, user_id):
         now = datetime.utcnow()
@@ -1267,9 +1308,9 @@ class CartService:
             )
             coupon_offer = result.scalars().first()
 
-            cart = self.coupon_validity(coupon_offer, cart)
-
-            return cart
+            valid, cart = self.coupon_validity(coupon_offer, cart)
+            if not valid:
+                return cart
         else:
             #get coupon id from session/ db
             coupon_id = await self.get_applied_coupon(request, db, user_id)
@@ -1294,7 +1335,9 @@ class CartService:
             )
             coupon_offer = result.scalars().first()
             
-            cart = self.coupon_validity(coupon_offer, cart)
+            valid, cart = self.coupon_validity(coupon_offer, cart)
+            if not valid:
+                return cart
         
         # minimum spent amount validation
         if cart.subtotal < coupon_offer.min_spent_amount:
@@ -1508,7 +1551,7 @@ class CartService:
                 return None
 
             cached_cart["coupon_id"] = None
-            cached_cart["remove_coupon"] = True
+            cached_cart["remove_coupon"] = None
             
             await set_cache(redis_cache_key, 
                 cached_cart,

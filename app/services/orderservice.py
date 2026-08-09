@@ -3,7 +3,7 @@ import uuid
 from fastapi import HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, raiseload
 
 from app.api.v1.endpoints.cart import get_cart
 from app.api.v1.schemas.carts import CartResponse
@@ -215,9 +215,9 @@ class OrderService:
             .options(
                 selectinload(Order.user),
                 selectinload(Order.cart),
-                selectinload(Order.items),
                 selectinload(Order.items)
                 .selectinload(OrderItem.product_variant)
+                .selectinload(ProductVariant.product)
             )
             .where(Order.id == order.id)
         )

@@ -99,7 +99,7 @@ async def user_register(
         #send sms 
         message = (f"Your verification code is {otp}. "
                 "It expires in 5 minutes. Do not share it with anyone.")
-        send_message(message, new_user.phone)
+        await send_message(message, new_user.phone)
         
         #save otp
         await OTPService.save_otp(new_user.phone, otp)
@@ -216,7 +216,7 @@ async def send_login_otp(
     #send sms 
     message = (f"Your verification code is {otp}. "
             "It expires in 5 minutes. Do not share it with anyone.")
-    send_message(message, user.phone)
+    await send_message(message, user.phone)
     
     #save otp
     await OTPService.save_otp(user.phone, otp)
@@ -416,88 +416,88 @@ async def refresh_token( response: Response,
         raise HTTPException(status_code=500, detail=str(e))
     
 
-@user_router.post("/forgot-password/", response_model=UserVerified)
-async def forgot_password( user: ForgotPassword, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    """ 
-    Sends password change email to the email.
+# @user_router.post("/forgot-password/", response_model=UserVerified)
+# async def forgot_password( user: ForgotPassword, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+#     """ 
+#     Sends password change email to the email.
     
-    params:
-    user: User email
+#     params:
+#     user: User email
 
-    """
-    db_user = await db.execute(
-        select(User).filter(User.email == user.email)
-    )
-    db_user = db_user.scalars().first()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="Invalid Email.")
+#     """
+#     db_user = await db.execute(
+#         select(User).filter(User.email == user.email)
+#     )
+#     db_user = db_user.scalars().first()
+#     if not db_user:
+#         raise HTTPException(status_code=404, detail="Invalid Email.")
     
-    verification_token = create_email_verification_token(email=user.email)
-    await send_email(background_tasks=background_tasks,
-                     subject="Forgot Password Link",
-                     recipients=[user.email],
-                     template_name='auth/forgot_password.html',
-                     context={'user': db_user.name,
-                              'verification_code': verification_token,
-                              'verification_link': f'{settings.FRONTEND_URL}/reset_password/{verification_token}'}
-                     )
-    return {"message": "Password reset link sent successfully to your email"}
-
-
-@user_router.post("/reset-password/", response_model=UserVerified)
-async def reset_password(password: ResetPasswordConfirmation, db: AsyncSession = Depends(get_db)):
-    """ 
-    Helps to reset password.
-    
-    params:
-    password: takes in old password, new password, and a reset code
-    
-    returns msg.
-    """
-    if password.new_password != password.confirm_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match")
-    payload = await decode_access_token(password.code)
-    if not payload:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
-
-    user = await db.execute(select(User).filter(User.email == payload["sub"]))
-    user = user.scalars().first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.password = hash_password(password.new_password)
-    await db.commit()
-    return {"message": "Password reset successfully"}
+#     verification_token = create_email_verification_token(email=user.email)
+#     await send_email(background_tasks=background_tasks,
+#                      subject="Forgot Password Link",
+#                      recipients=[user.email],
+#                      template_name='auth/forgot_password.html',
+#                      context={'user': db_user.name,
+#                               'verification_code': verification_token,
+#                               'verification_link': f'{settings.FRONTEND_URL}/reset_password/{verification_token}'}
+#                      )
+#     return {"message": "Password reset link sent successfully to your email"}
 
 
-@user_router.post("/change-password/")
-async def change_password(
-    response: Response,
-    data: ChangePassword, 
-    db: AsyncSession = Depends(get_db), 
-    user: str = Depends(get_current_user),
-    ):
-    """ 
-    Changes user password.
+# @user_router.post("/reset-password/", response_model=UserVerified)
+# async def reset_password(password: ResetPasswordConfirmation, db: AsyncSession = Depends(get_db)):
+#     """ 
+#     Helps to reset password.
     
-    params:
-    data: takes in old password, new password, and confirm new password
-    user: returns logged in user
-    """
-    if not user or not verify_password(data.old_password, user.password):
-        raise HTTPException(status_code=400, detail="Incorrect password")
+#     params:
+#     password: takes in old password, new password, and a reset code
     
-    if not(data.new_password == data.new_password_again):
-        raise HTTPException(status_code=400, detail="Password don't match.")
+#     returns msg.
+#     """
+#     if password.new_password != password.confirm_password:
+#         raise HTTPException(status_code=400, detail="Passwords do not match")
+#     payload = await decode_access_token(password.code)
+#     if not payload:
+#         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    user.password = hash_password(data.new_password)
-    await db.commit()
+#     user = await db.execute(select(User).filter(User.email == payload["sub"]))
+#     user = user.scalars().first()
+
+#     if not user:
+#         raise HTTPException(status_code=404, detail="User not found")
+#     user.password = hash_password(password.new_password)
+#     await db.commit()
+#     return {"message": "Password reset successfully"}
+
+
+# @user_router.post("/change-password/")
+# async def change_password(
+#     response: Response,
+#     data: ChangePassword, 
+#     db: AsyncSession = Depends(get_db), 
+#     user: str = Depends(get_current_user),
+#     ):
+#     """ 
+#     Changes user password.
     
-    ##logout after change in password
-    response.delete_cookie(key="access_token",  httponly=False, samesite="none", secure=True)
-    response.delete_cookie(key="refresh_token",  httponly=False, samesite="none", secure=True)
+#     params:
+#     data: takes in old password, new password, and confirm new password
+#     user: returns logged in user
+#     """
+#     if not user or not verify_password(data.old_password, user.password):
+#         raise HTTPException(status_code=400, detail="Incorrect password")
     
-    return {"message": "Password changed successfully"}
+#     if not(data.new_password == data.new_password_again):
+#         raise HTTPException(status_code=400, detail="Password don't match.")
+
+#     user.password = hash_password(data.new_password)
+#     await db.commit()
+    
+#     ##logout after change in password
+#     response.delete_cookie(key="access_token",  httponly=False, samesite="none", secure=True)
+#     response.delete_cookie(key="refresh_token",  httponly=False, samesite="none", secure=True)
+    
+#     return {"message": "Password changed successfully"}
 
 
 @user_router.get('/logout/')

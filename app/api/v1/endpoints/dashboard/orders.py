@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -10,6 +10,7 @@ from app.api.v1.schemas.orders import OrderDeliveryStatusUpdate, OrderDetailResp
 from app.core.database import get_db
 from app.models.orders import DeliveryStatus, Order, OrderStatus
 from app.models.user import User
+from app.services.smsservice import send_message
 from app.utils.pagination import get_paginated_result
 from app.auth.permissions import staff_only
 
@@ -153,11 +154,27 @@ async def update_order_status(
             )
         )
 
+    if new_status == OrderStatus.CONFIRMED:
+        order.confirmed_at = datetime.now(timezone.utc)
+    if new_status == OrderStatus.COMPLETED:
+        order.completed_at = datetime.now(timezone.utc)
+    if new_status == OrderStatus.CANCELLED:
+        order.cancelled_at = datetime.now(timezone.utc)
+    
     order.status = new_status
     
     await db.commit()
     await db.refresh(order)
-
+    
+    if order.status == OrderStatus.CONFIRMED:
+        message = (f"Hi {order.receiver_first_name}, your order #{str(order.order_number)[-8:]} has been confirmed and is now being prepared."
+                   "We’ll notify you when it’s out for delivery. Thank you for shopping with us!")
+        await send_message(message, order.receiver_phone)
+    if order.status == OrderStatus.CANCELLED:
+        message = (f"Hi {order.receiver_first_name}, your order #{str(order.order_number)[-8:]} has been cancelled.If you have already made a payment, any applicable refund will be processed according to our refund policy."
+                   "Please contact us if you need assistance.")
+        await send_message(message, order.receiver_phone)
+        
     return {
         "message": "Order status updated successfully",
         "order_id": order.id,
@@ -259,6 +276,11 @@ async def update_delivery_status(
     
     await db.commit()
     await db.refresh(order)
+    
+    if order.delivery_status == DeliveryStatus.DELIVERED:
+        message = (f"Hi {order.receiver_first_name}, your order #{str(order.order_number)[-8:]} has been successfully delivered."
+                   "Thank you for shopping with us! We hope you enjoy your purchase.")
+        await send_message(message, order.receiver_phone)
 
     return {
         "message": "Order delivery status updated successfully",

@@ -76,6 +76,6 @@ class OTPService:
         # send SMS here
         message = (f"Your verification code is {otp}. "
                 "It expires in 5 minutes. Do not share it with anyone.")
-        send_message(message, phone)
+        await send_message(message, phone)
 
         return True

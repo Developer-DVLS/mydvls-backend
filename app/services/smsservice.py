@@ -2,7 +2,7 @@ import requests
 from app.core.config import settings
 
 
-def send_message(message, phone_number, schedule=False):
+async def send_message(message, phone_number, schedule=False):
     """
     This function sends message request to the message server
     """
