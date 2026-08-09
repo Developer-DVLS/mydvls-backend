@@ -1,10 +1,15 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 
+from app.core.config import settings
 from app.models.orders import DeliveryStatus, OrderStatus
+
+
+APP_TIMEZONE = ZoneInfo(settings.APP_TIMEZONE)
 
 class OrderBase(BaseModel):
     # subtotal: float
@@ -54,6 +59,19 @@ class OrderResponse(OrderBase):
     
     class Config:
         from_attributes = True
+        
+    @field_serializer(
+        "created_at",
+        "updated_at",
+        "confirmed_at",
+        "completed_at",
+        "cancelled_at"
+        )
+    def serialize_created_at(self, value: datetime) -> str:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+
+        return value.astimezone(APP_TIMEZONE).isoformat()
     
 class PaginatedOrderResponse(BaseModel):
     total: int
@@ -96,6 +114,19 @@ class OrderDetailResponse(OrderBase):
     
     class Config:
         from_attributes = True
+        
+    @field_serializer(
+        "created_at",
+        "updated_at",
+        "confirmed_at",
+        "completed_at",
+        "cancelled_at"
+        )
+    def serialize_created_at(self, value: datetime) -> str:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+
+        return value.astimezone(APP_TIMEZONE).isoformat()
         
 class OrderStatusUpdate(BaseModel):
     status: OrderStatus

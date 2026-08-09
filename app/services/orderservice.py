@@ -160,13 +160,13 @@ class OrderService:
                                     ) 
                 self.db.add(order_item)
         else:
-            redis_cart = await cart_service.get_redis_cart(request)
-            redis_items = redis_cart.get("cart_products")
+            # redis_cart = await cart_service.get_redis_cart(request)
+            redis_items = enriched_cart.cart_products
 
             if not redis_items:
                 raise HTTPException(status_code=400, detail="Cart is empty")
             
-            variant_ids = [item["product_variant_id"] for item in redis_items]
+            variant_ids = [item.product_variant_id for item in redis_items]
 
             # Single batched query instead of one query per item
             result = await self.db.execute(
@@ -184,24 +184,29 @@ class OrderService:
             variants_by_id = {v.id: v for v in result.scalars().all()}
 
             for item in redis_items:
-                variant = variants_by_id.get(item["product_variant_id"])
+                variant = variants_by_id.get(item.product_variant_id)
                 if not variant:
                     raise HTTPException(status_code=400, detail="Invalid product_variant_id.")
 
                 self.db.add(OrderItem(
                     order_id=order.id,
                     product_variant_id=variant.id,
-                    quantity=item["quantity"],
+                    quantity=item.quantity,
                     unit_price=variant.price,
-                    total_price=variant.price * item["quantity"],
+                    total_price=variant.price * item.quantity,
                 ))
-                
+                print("exists!!!!", enriched_cart.bogo_offer_exists)
                 ## add bogo free item 
-                if redis_cart.get('bogo_offer_exists') and item["offer"] and item["offer"]["type"] == OfferType.BOGO:
+                if (
+                    enriched_cart.bogo_offer_exists
+                    and item.offer
+                    and item.offer.type == OfferType.BOGO
+                    and item.bogo_free_item
+                ):
                     self.db.add(OrderItem(
                         order_id=order.id,
-                        product_variant_id=item["bogo_free_item"]["product_variant_id"],
-                        quantity=item["bogo_free_item"]["quantity"],
+                        product_variant_id=item.bogo_free_item.product_variant_id,
+                        quantity=item.bogo_free_item.quantity,
                         unit_price=0,
                         total_price=0,
                     ))

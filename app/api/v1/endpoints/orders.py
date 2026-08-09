@@ -22,6 +22,7 @@ from app.services.security import get_current_user_optional
 from app.services.smsservice import send_message
 from app.utils.cache import delete_cache, get_cache
 from app.utils.send_email import send_email
+from app.utils.to_app_timezone import to_app_timezone
 
 order_router = APIRouter(prefix="/order", tags=['order'])
 
@@ -392,11 +393,11 @@ async def get_invoice(
             }
             for c in order.applied_combos
         ],
-        "created_at": order.created_at,
-        "updated_at": order.updated_at,
-        "confirmed_at": order.confirmed_at,
-        "completed_at": order.completed_at,
-        "cancelled_at": order.cancelled_at,
+        "created_at": to_app_timezone(order.created_at),
+        "updated_at": to_app_timezone(order.updated_at),
+        "confirmed_at": to_app_timezone(order.confirmed_at),
+        "completed_at": to_app_timezone(order.completed_at),
+        "cancelled_at": to_app_timezone(order.cancelled_at),
     }
 
     return invoice
