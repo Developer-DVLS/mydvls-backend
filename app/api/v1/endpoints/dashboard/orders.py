@@ -155,11 +155,11 @@ async def update_order_status(
         )
 
     if new_status == OrderStatus.CONFIRMED:
-        order.confirmed_at = datetime.now(timezone.utc)
+        order.confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     if new_status == OrderStatus.COMPLETED:
-        order.completed_at = datetime.now(timezone.utc)
+        order.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     if new_status == OrderStatus.CANCELLED:
-        order.cancelled_at = datetime.now(timezone.utc)
+        order.cancelled_at = datetime.now(timezone.utc).replace(tzinfo=None)
     
     order.status = new_status
     
