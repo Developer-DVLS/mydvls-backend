@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
-from pydantic import BaseModel
+from fastapi import HTTPException
+from pydantic import BaseModel, field_validator
 
 from app.models.carts import CartStatus
 from app.models.offers import DiscountType, OfferType
@@ -196,3 +197,10 @@ class CartProductQtyUpdate(BaseModel):
     
     class Config:
         from_attributes = True
+        
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, value):
+        if value < 1:
+            raise HTTPException(status_code=422, detail="Invalid quantity.")
+        return value

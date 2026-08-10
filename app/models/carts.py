@@ -27,7 +27,8 @@ class Cart(SoftDeleteMixin, Base):
     status =  Column(Enum(CartStatus), default=CartStatus.ACTIVE, nullable=False, index=True)
     
     # relationships
-    cart_products = relationship("CartProduct", back_populates="cart", cascade="all, delete-orphan")
+    cart_products = relationship("CartProduct", back_populates="cart", cascade="all, delete-orphan",
+                                 order_by="CartProduct.created_at.desc()",)
     user = relationship("User")
     order = relationship("Order", back_populates="cart", uselist=False)
     
