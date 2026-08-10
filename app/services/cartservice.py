@@ -938,17 +938,28 @@ class CartService:
                 cart_product.available_stock = check_stock_response["available_stock"]
                 cart_product.stock_msg = check_stock_response["message"]
             except HTTPException as e:
-                if e.detail["type"] == "out_of_stock":
-                    cart_product.stock_type =  e.detail["type"]
-                    cart_product.in_stock = False
-                    cart_product.available_stock = 0
-                    cart_product.stock_msg = e.detail["message"]
+                detail = e.detail
+                if isinstance(detail, dict):
+                    stock_type = detail.get("type")
 
-                elif e.detail["type"] == "insufficient_stock":
-                    cart_product.stock_type =  e.detail["type"]
-                    cart_product.in_stock = False
-                    cart_product.available_stock = e.detail["available_stock"]
-                    cart_product.stock_msg = e.detail["message"] + ". " + "Update quantity before checkout."
+                    if stock_type == "out_of_stock":
+                        cart_product.stock_type = stock_type
+                        cart_product.in_stock = False
+                        cart_product.available_stock = 0
+                        cart_product.stock_msg = detail.get("message", "Product is out of stock.")
+
+                    elif stock_type == "insufficient_stock":
+                        cart_product.stock_type = stock_type
+                        cart_product.in_stock = False
+                        cart_product.available_stock = detail.get("available_stock", 0)
+                        cart_product.stock_msg = (
+                            detail.get("message", "Insufficient stock.")
+                            + ". Update quantity before checkout."
+                        )
+
+                else:
+                    # detail is a string
+                    print("HTTPException detail:", detail)
         
         # check for combo offer
         combo_offers = None
