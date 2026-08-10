@@ -1,9 +1,13 @@
 from typing import List, Optional
 from uuid import UUID
-from pydantic import BaseModel, EmailStr
-from datetime import datetime
+from zoneinfo import ZoneInfo
+from pydantic import BaseModel, EmailStr, field_serializer
+from datetime import datetime, timezone
 
+from app.core.config import settings
 from app.models.user import UserRole, UserStatus
+
+APP_TIMEZONE = ZoneInfo(settings.APP_TIMEZONE)
 
 class UserRegisterRequest(BaseModel):
     first_name: str
@@ -50,6 +54,19 @@ class UserResponse(BaseModel):
     
     class Config:
         from_attributes = True
+        
+    @field_serializer(
+        "created_at",
+        "updated_at",
+        "last_login_at"
+        )
+    def serialize_created_at(self, value: datetime) -> Optional[str]:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+
+        return value.astimezone(APP_TIMEZONE).isoformat()
 
 class PaginatedUserResponse(BaseModel):
     total: int
