@@ -135,13 +135,14 @@ class CartService:
     async def update(
         self, 
         request: Request,
+        response: Response,
         db: AsyncSession,  
         quantity: int, 
         cart_product_id: int = None, 
         user_id=None
     ):
         if user_id:
-            return await self.update_db_cart_item(request, db, user_id, cart_product_id, quantity)
+            return await self.update_db_cart_item(request, response, db, user_id, cart_product_id, quantity)
 
         return await self.update_redis_cart(db, request, cart_product_id, quantity)
     
@@ -617,15 +618,18 @@ class CartService:
         return result.scalars().first()
 
     
-    async def update_db_cart_item(self, request, db: AsyncSession, user_id, cart_product_id, quantity):
+    async def update_db_cart_item(self, request, response, db: AsyncSession, user_id, cart_product_id, quantity):
         cart = await self.get_or_create_db_cart(db, user_id)
-        
-        ## get calculated cart from cache
-        redis_cache_key = request.cookies.get(self.SESSION_COOKIE_KEY)
-        if not redis_cache_key:
-            return
-        cache_cart = await get_cache(redis_cache_key)
-        cache_cart_items = cache_cart.get("cart_products", [])
+
+        enriched_cart = await self.enrich_cart(
+            request=request,
+            response=response,
+            db=db,
+            user_id=user_id,
+            cart=cart,
+            coupon_code=None,
+            remove_coupon= None
+        )
         
         # check if cartproduct id is valid
         result = await db.execute(
@@ -658,24 +662,23 @@ class CartService:
                     status_code=e.status_code,
                     detail=e.detail["message"]
                 )
-        
-        for cache_cart_item in cache_cart_items:
-            if int(cache_cart_item.get("id")) == int(item.id):
+                                
+        for cache_cart_item in enriched_cart.cart_products:
+            if int(cache_cart_item.id) == int(item.id):
                 if quantity > item.quantity:
-                    quantity_change = quantity - cache_cart_item["quantity_after_combo"]
+                    quantity_change = quantity - cache_cart_item.quantity_after_combo
                     item.quantity += quantity_change
-                    cache_cart_item["quantity_after_combo"] = quantity
+                    cache_cart_item.quantity_after_combo = quantity
                     
                 if quantity < item.quantity:
-                    quantity_change = cache_cart_item["quantity_after_combo"] - quantity
+                    quantity_change = cache_cart_item.quantity_after_combo - quantity
                     item.quantity -= quantity_change
-                    cache_cart_item["quantity_after_combo"] = quantity
+                    cache_cart_item.quantity_after_combo = quantity
 
                 if quantity ==  item.quantity:
-                    quantity_change = quantity - cache_cart_item["quantity_after_combo"]
+                    quantity_change = quantity - cache_cart_item.quantity_after_combo
                     item.quantity += quantity_change
-                    cache_cart_item["quantity_after_combo"] = quantity
-                    
+                    cache_cart_item.quantity_after_combo = quantity
             
         await db.commit()
             
@@ -705,8 +708,6 @@ class CartService:
         if not cart_product:
             raise HTTPException(status_code=404, detail="CartProduct not found")
         
-        
-
         await db.delete(cart_product)
         await db.commit()
         return cart

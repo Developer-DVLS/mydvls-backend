@@ -87,6 +87,7 @@ async def add_to_cart(
 @cart_router.patch("/update-cart-product/{cart_product_id}/")
 async def update_cart_product(
     request: Request,
+    response:Response,
     data: CartProductQtyUpdate,
     cart_product_id: int,
     db: AsyncSession = Depends(get_db),
@@ -96,6 +97,7 @@ async def update_cart_product(
 
     await cart_service.update(
         request=request,
+        response=response,
         db=db,  
         quantity=data.quantity, 
         cart_product_id=cart_product_id, 
