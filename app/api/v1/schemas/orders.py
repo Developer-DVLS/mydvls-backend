@@ -11,14 +11,32 @@ from app.models.orders import DeliveryStatus, OrderStatus
 
 APP_TIMEZONE = ZoneInfo(settings.APP_TIMEZONE)
 
+class OrderBillingAddressBase(BaseModel):
+    address_line1: str
+    address_line2: Optional[str] = None
+    city: str
+    state: str
+    postal_code: str
+    country: str
+    latitude: float
+    longitude: float
+
+class OrderShippingAddressBase(BaseModel):
+    address_line1: str
+    address_line2: Optional[str] = None
+    city: str
+    state: str
+    postal_code: str
+    country: str
+    latitude: float
+    longitude: float
+    
 class OrderBase(BaseModel):
-    # subtotal: float
-    # tax_amount: float
-    # discount_amount: float
-    # delivery_charge: float
-    # total: float
-    currency: Optional[str] = None
-    notes: Optional[str] = None
+    billing_address_id: Optional[UUID] = None
+    shipping_address_id: Optional[UUID] = None
+    billing_address: Optional[OrderBillingAddressBase] = None
+    shipping_address: Optional[OrderShippingAddressBase] = None
+    
     receiver_first_name: str
     receiver_last_name: str
     receiver_email: str
@@ -31,6 +49,13 @@ class OrderBase(BaseModel):
     country: str
     latitude: float
     longitude: float
+    
+    shipping_full_name: Optional[str] = None
+    shipping_company: Optional[str] = None
+    shipping_phone: Optional[str] = None
+    
+    currency: Optional[str] = None
+    notes: Optional[str] = None
     
 class OrderCreate(OrderBase):
     opaqueDataDescriptor: str

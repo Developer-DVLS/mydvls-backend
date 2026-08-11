@@ -7,7 +7,8 @@ from sqlalchemy.orm import selectinload, raiseload
 
 from app.api.v1.endpoints.cart import get_cart
 from app.api.v1.schemas.carts import CartResponse
-from app.api.v1.schemas.orders import OrderCreate
+from app.api.v1.schemas.orders import OrderBillingAddressBase, OrderCreate, OrderShippingAddressBase
+from app.models.address import Address
 from app.models.carts import CartProduct
 from app.models.offers import Offer, OfferType
 from app.models.orders import AppliedCombo, Order, OrderItem
@@ -20,6 +21,24 @@ class OrderService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        
+    async def get_order_address(self, user_id, address_id):
+        result = await self.db.execute(
+            select(Address).where(
+                Address.id == address_id,
+                Address.user_id == user_id,
+            )
+        )
+
+        address = result.scalar_one_or_none()
+
+        if not address:
+            raise HTTPException(
+                status_code=404,
+                detail="Address not found",
+            )
+
+        return address
         
     async def create_order(
         self,
@@ -110,6 +129,38 @@ class OrderService:
                 data.receiver_email,
                 data.receiver_phone
             )
+        
+        if data.billing_address_id:
+            order_billing_address = await self.get_order_address(
+                user.id, 
+                data.billing_address_id
+                )
+            data.billing_address = OrderBillingAddressBase(
+                address_line1=order_billing_address.address_line1,
+                address_line2=order_billing_address.address_line2,
+                city=order_billing_address.city,
+                state=order_billing_address.state,
+                postal_code=order_billing_address.postal_code,
+                country=order_billing_address.country,
+                latitude=order_billing_address.latitude,
+                longitude=order_billing_address.longitude,
+            )
+        
+        if data.shipping_address_id:
+            order_shipping_address = await self.get_order_address(
+                user.id, 
+                data.shipping_address_id
+                )   
+            data.shipping_address = OrderShippingAddressBase(
+                address_line1=order_shipping_address.address_line1,
+                address_line2=order_shipping_address.address_line2,
+                city=order_shipping_address.city,
+                state=order_shipping_address.state,
+                postal_code=order_shipping_address.postal_code,
+                country=order_shipping_address.country,
+                latitude=order_shipping_address.latitude,
+                longitude=order_shipping_address.longitude,
+            )
         # Create order
         order = Order(
             user_id = user.id,
@@ -123,18 +174,32 @@ class OrderService:
             total = enriched_cart.total_amount,
             currency = data.currency or "USD",
             notes = data.notes,
+            
             receiver_first_name = data.receiver_first_name, 
             receiver_last_name = data.receiver_last_name,
             receiver_email = data.receiver_email,
             receiver_phone = data.receiver_phone, 
-            address_line1 = data.address_line1,
-            address_line2 = data.address_line2 or None,
-            city = data.city,
-            state = data.state,
-            postal_code = data.postal_code,
-            country = data.country,
-            latitude = data.latitude,
-            longitude = data.longitude,
+            address_line1 = data.billing_address.address_line1,
+            address_line2 = data.billing_address.address_line2 or None,
+            city = data.billing_address.city,
+            state = data.billing_address.state,
+            postal_code = data.billing_address.postal_code,
+            country = data.billing_address.country,
+            latitude = data.billing_address.latitude,
+            longitude = data.billing_address.longitude,
+            
+            shipping_full_name = data.shipping_full_name,
+            shipping_company = data.shipping_company,
+            shipping_phone = data.shipping_phone,
+            shipping_address_line_1 = data.shipping_address.address_line1,
+            shipping_address_line_2 = data.shipping_address.address_line2 or None,
+            shipping_city = data.shipping_address.city,
+            shipping_state =  data.shipping_address.state,
+            shipping_postal_code = data.shipping_address.postal_code,
+            shipping_country = data.shipping_address.country,
+            shipping_latitude = data.shipping_address.latitude,
+            shipping_longitude = data.shipping_address.longitude,
+            
             delivery_distance = None,
             payment_status="pending"
         )

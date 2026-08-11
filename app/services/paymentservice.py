@@ -1,9 +1,13 @@
 # Replace with your actual credentials 
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 import httpx
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.schemas.payment import ChargeRequest
 from app.core.config import settings
+from app.models.orders import Order
+from app.core.database import get_db
 
 
 API_LOGIN_ID = settings.API_LOGIN_ID
@@ -13,8 +17,31 @@ ENDPOINT_URL = settings.ENDPOINT_URL
 class PaymentService:
     async def charge_card(
         self, 
-        payment: ChargeRequest
+        payment: ChargeRequest,
+        db: AsyncSession = Depends(get_db),
     ) -> dict:
+        # get order 
+        order_result = await db.execute(
+            select(Order).where(
+                Order.order_number == payment["order_number"]
+                )
+        )
+        order = order_result.scalars().first()
+        if not order:
+            raise HTTPException(
+                    status_code=404, 
+                    detail="Order not Found."
+                    )
+        
+        shipping_name_parts = (order.shipping_full_name or "").strip().split(" ", 1)
+
+        shipping_first_name = shipping_name_parts[0] if shipping_name_parts else ""
+        shipping_last_name = (
+            shipping_name_parts[1]
+            if len(shipping_name_parts) > 1
+            else ""
+        )
+        
         payload = {
             "createTransactionRequest": {
                 "merchantAuthentication": {
@@ -35,6 +62,28 @@ class PaymentService:
                     },
                     "customer": {
                         "email": payment["receiver_email"]
+                    },
+                    # Billing address
+                    "billTo": {
+                        "firstName": (order.receiver_first_name or "")[:50],
+                        "lastName": (order.receiver_last_name or "")[:50],
+                        "address": (order.address_line1 or "")[:60],
+                        "city": (order.city or "")[:40],
+                        "state": (order.state or "")[:40],
+                        "zip": (order.postal_code or "")[:20],
+                        "country": (order.country or "")[:60],
+                    },
+                    
+                    # Shipping address
+                    "shipTo": {
+                        "firstName": shipping_first_name,
+                        "lastName": shipping_last_name,
+                        "company": (order.shipping_company or "")[:50],
+                        "address": order.shipping_address_line_1[:60],
+                        "city": (order.shipping_city or "")[:40],
+                        "state": (order.shipping_state or "")[:40],
+                        "zip": (order.shipping_postal_code or "")[:20],
+                        "country": (order.shipping_country or "")[:60],
                     },
                 },
             }

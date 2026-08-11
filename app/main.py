@@ -41,6 +41,8 @@ from app.api.v1.endpoints.business import business_router
 from app.api.v1.endpoints.dashboard.business import admin_business_router
 from app.api.v1.endpoints.dashboard.report import report_router
 from app.api.v1.endpoints.visits import visit_routers
+from app.api.v1.endpoints.address import user_address_router 
+from app.api.v1.endpoints.dashboard.address import admin_address_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -104,6 +106,8 @@ app.include_router(business_router)
 app.include_router(admin_business_router)
 app.include_router(report_router)
 app.include_router(visit_routers)
+app.include_router(user_address_router)
+app.include_router(admin_address_router)
 
 # =========================
 # CORS CONFIGURATION

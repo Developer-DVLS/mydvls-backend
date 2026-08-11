@@ -32,3 +32,5 @@ def role_required(allowed_roles: list[UserRole]):
 admin_only = role_required([UserRole.ADMIN])
 staff_only = role_required([UserRole.ADMIN, UserRole.STAFF])
 customer_only = role_required([UserRole.CUSTOMER])
+
+

@@ -65,7 +65,7 @@ async def create_order(
             "order_number": order.order_number,
             "receiver_email": order.receiver_email
         }
-        result = await payment_service.charge_card(payment=payment_payload)
+        result = await payment_service.charge_card(db, payment=payment_payload)
         
         #3. Update order payment status
         order.payment_intent_id = result["transactionId"]

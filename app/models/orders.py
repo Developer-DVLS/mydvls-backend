@@ -39,6 +39,8 @@ class Order(Base):
         "users.id", ondelete="SET NULL"), nullable=False, index=True)
     cart_id = Column(Integer, ForeignKey("carts.id"), nullable=True, unique=True)
     coupon_id = Column(Integer, ForeignKey("offers.id", ondelete="SET NULL"), nullable=True)
+    billing_address_id = Column(UUID(as_uuid=True),ForeignKey("addresses.id", ondelete="SET NULL"), nullable=True)
+    shipping_address_id = Column(UUID(as_uuid=True),ForeignKey("addresses.id", ondelete="SET NULL"), nullable=True)
 
     # Order number (business-specific, human-readable)
     order_number = Column(String(50), nullable=True, unique=True, index=True)
@@ -56,13 +58,14 @@ class Order(Base):
                     nullable=False, index=True)
     notes = Column(String(500), nullable=True)
 
-    # Delivery information
+    # -------------------------
+    # Billing snapshot
+    # -------------------------
     receiver_first_name = Column(String(100), nullable=False)
     receiver_last_name = Column(String(100), nullable=False)
     receiver_email = Column(String(255), nullable=False)
     receiver_phone = Column(String(15), nullable=False)
-    # Delivery address if applicable
-    # Address information
+    # Billing Address 
     address_line1 = Column(String(255), nullable=False)
     address_line2 = Column(String(255), nullable=True)
     city = Column(String(100), nullable=False)
@@ -71,6 +74,21 @@ class Order(Base):
     country = Column(String(100), nullable=False, default="US")
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
+    
+    # -------------------------
+    # Shipping snapshot
+    # -------------------------
+    shipping_full_name = Column(String(100), nullable=True)
+    shipping_company = Column(String(100), nullable=True)
+    shipping_phone = Column(String(15), nullable=True)
+    shipping_address_line_1 = Column(String(255), nullable=True)
+    shipping_address_line_2 = Column(String(255), nullable=True)
+    shipping_city = Column(String(100), nullable=True)
+    shipping_state = Column(String(100), nullable=True)
+    shipping_postal_code = Column(String(20), nullable=True)
+    shipping_country = Column(String(100), nullable=True, default="US")
+    shipping_latitude = Column(Float, nullable=True)
+    shipping_longitude = Column(Float, nullable=True)
     
     # Delivery distance in miles (for delivery fee calculation)
     delivery_distance = Column(Numeric(10, 2), nullable=True)
