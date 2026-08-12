@@ -65,7 +65,7 @@ async def create_order(
             "order_number": order.order_number,
             "receiver_email": order.receiver_email
         }
-        result = await payment_service.charge_card(db, payment=payment_payload)
+        result = await payment_service.charge_card( payment=payment_payload, db=db)
         
         #3. Update order payment status
         order.payment_intent_id = result["transactionId"]
@@ -348,7 +348,6 @@ async def get_invoice(
         "receiver_last_name": order.receiver_last_name,
         "receiver_email": order.receiver_email,
         "receiver_phone": order.receiver_phone,
-        
         "address_line1": order.address_line1,
         "address_line2": order.address_line2,
         "city": order.city,
@@ -357,6 +356,18 @@ async def get_invoice(
         "country": order.country,
         "latitude": order.latitude,
         "longitude": order.longitude,
+        
+        "shipping_full_name": order.shipping_full_name,
+        "shipping_company": order.shipping_company,
+        "shipping_phone": order.shipping_phone,
+        "shipping_address_line_1": order.shipping_address_line_1,
+        "shipping_address_line_2": order.shipping_address_line_2,
+        "shipping_city": order.shipping_city,
+        "shipping_state": order.shipping_state,
+        "shipping_postal_code": order.shipping_postal_code,
+        "shipping_country": order.shipping_country,
+        "shipping_latitude": order.shipping_latitude,
+        "shipping_longitude": order.shipping_longitude,
         
         "delivery_distance": order.delivery_distance,
         "delivery_status": order.delivery_status,
@@ -430,6 +441,10 @@ async def get_test_nonce():
     opaque = data["opaqueData"]
     print(opaque["dataDescriptor"])  # use this as opaqueDataDescriptor
     print(opaque["dataValue"]) 
+    return {
+        "descriptor": opaque["dataDescriptor"],
+        "value": opaque["dataValue"]
+    }
     
 @order_router.post("/api/charge")
 async def charge_card(payload: ChargeRequest):

@@ -65,9 +65,14 @@ async def add_to_cart(
     try:
         await cart_service.check_stock(db, product_variant_id,quantity)
     except HTTPException as e:
+        if isinstance(e.detail, dict):
+            message = e.detail.get("message", str(e.detail))
+        else:
+            message = str(e.detail)
+
         raise HTTPException(
             status_code=e.status_code,
-            detail=e.detail["message"]
+            detail=message
         )
 
     await cart_service.add(
