@@ -7,20 +7,21 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.schemas.orders import OrderCreate, OrderDetailResponse
+from app.api.v1.schemas.orders import OrderCreate, OrderDetailResponse, PaginatedOrderResponse
 from app.api.v1.schemas.payment import ChargeRequest
 from app.core.database import get_db
 from app.models.carts import Cart, CartProduct, CartStatus
 from app.models.offers import ComboOffer, ComboOfferItem, Offer
-from app.models.orders import AppliedCombo, Order, OrderItem
+from app.models.orders import AppliedCombo, Order, OrderItem, OrderStatus
 from app.models.products import Product, ProductVariant, VariantOption, VariantOptionValue
 from app.models.user import User
 from app.services.cartservice import CartService
 from app.services.orderservice import OrderService
 from app.services.paymentservice import PaymentService
-from app.services.security import get_current_user_optional
+from app.services.security import get_current_user, get_current_user_optional
 from app.services.smsservice import send_message
 from app.utils.cache import delete_cache, get_cache
+from app.utils.pagination import get_paginated_result
 from app.utils.send_email import send_email
 from app.utils.to_app_timezone import to_app_timezone
 
@@ -65,7 +66,7 @@ async def create_order(
             "order_number": order.order_number,
             "receiver_email": order.receiver_email
         }
-        result = await payment_service.charge_card( payment=payment_payload, db=db)
+        result = await payment_service.charge_card(request, payment=payment_payload, db=db)
         
         #3. Update order payment status
         order.payment_intent_id = result["transactionId"]
@@ -412,6 +413,28 @@ async def get_invoice(
     }
 
     return invoice
+
+
+@order_router.get("/user/", response_model=PaginatedOrderResponse)
+async def get_user_orders(
+    status: Optional[OrderStatus] = None,
+    skip: int = Query(0, ge=0, description="Number of items to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Number of items to return"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    query =select(Order).options(
+            selectinload(Order.items)
+        ).where( 
+                Order.user_id == current_user.id
+                )
+
+    if status:
+        query = query.where(
+            Order.status == status
+        )
+        
+    return await get_paginated_result(db, query, skip, limit)
 
 from app.core.config import settings
 @order_router.get("get_token")

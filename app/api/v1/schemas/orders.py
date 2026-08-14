@@ -93,8 +93,8 @@ class OrderResponse(BaseModel):
     shipping_state: Optional[str] = None
     shipping_postal_code: Optional[str] = None
     shipping_country: Optional[str] = None
-    shipping_latitude: Optional[str] = None
-    shipping_longitude: Optional[str] = None
+    shipping_latitude: Optional[float] = None
+    shipping_longitude: Optional[float] = None
     
     created_at: datetime
     updated_at: datetime
