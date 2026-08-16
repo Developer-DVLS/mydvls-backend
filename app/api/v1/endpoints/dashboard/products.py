@@ -155,36 +155,63 @@ async def update_product(
     current_user: User = Depends(staff_only),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Product).where(
-            Product.id == product_id,
-            Product.deleted_at.is_(None)
-            )
-    )
-    product = result.scalars().first()
-
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
-    update_data = data.model_dump(exclude_unset=True)
-
-    # validate category only if provided
-    if "category_id" in update_data:
-        cat = await db.execute(
-            select(ProductCategory).where(
-                ProductCategory.id == update_data["category_id"]
-            )
+    try:
+        result = await db.execute(
+            select(Product).where(
+                Product.id == product_id,
+                Product.deleted_at.is_(None)
+                )
         )
-        if not cat.scalars().first():
-            raise HTTPException(status_code=404, detail="Category not found")
+        product = result.scalars().first()
 
-    # apply only provided fields
-    for field, value in update_data.items():
-        setattr(product, field, value)
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
 
-    await db.commit()
-    await db.refresh(product)
+        update_data = data.model_dump(exclude_unset=True)
 
+        # validate category only if provided
+        if "category_id" in update_data:
+            cat = await db.execute(
+                select(ProductCategory).where(
+                    ProductCategory.id == update_data["category_id"]
+                )
+            )
+            if not cat.scalars().first():
+                raise HTTPException(status_code=404, detail="Category not found")
+
+        # apply only provided fields
+        for field, value in update_data.items():
+            setattr(product, field, value)
+
+        await db.commit()
+        await db.refresh(product)
+    except IntegrityError as e:
+        await db.rollback()
+        error = str(e.orig)
+        
+        if "uq_product_name_active" in error:
+            raise HTTPException(
+                status_code=400,
+                detail="A product with this name already exists."
+            )
+        
+        if "uq_product_option" in error:
+            raise HTTPException(
+                status_code=400,
+                detail="Option already exists for this product."
+            )
+
+        if "uq_option_value" in error:
+            raise HTTPException(
+                status_code=400,
+                detail="Option value already exists."
+            )
+        
+        raise HTTPException(
+            status_code=400,
+            detail="Database integrity error."
+        )
+        
     # reload with relationship
     result = await db.execute(
         select(Product)
@@ -387,6 +414,12 @@ async def create_product_with_variant_options(
     except IntegrityError as e:
         await db.rollback()
         error = str(e.orig)
+        
+        if "uq_product_name_active" in error:
+            raise HTTPException(
+                status_code=400,
+                detail="A product with this name already exists."
+            )
         
         if "uq_product_option" in error:
             raise HTTPException(
