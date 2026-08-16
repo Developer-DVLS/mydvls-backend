@@ -330,6 +330,22 @@ async def create_product_with_variant_options(
 
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
+        
+        # check for existing product name
+        existing_product_result = await db.execute(
+            select(Product).where(
+                func.lower(Product.name) == data.name.lower(),
+                Product.deleted_at.is_(None)
+            )
+        )
+
+        existing_product = existing_product_result.scalars().first()
+
+        if existing_product:
+            raise HTTPException(
+                status_code=400,
+                detail="A product with this name already exists."
+            )
 
         new_product = Product(
             category_id=data.category_id,
