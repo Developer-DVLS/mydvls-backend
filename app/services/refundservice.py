@@ -5,11 +5,16 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
+from sqlalchemy.orm import selectinload
 
 from app.models.refunds import Refund, RefundStatus
 from app.core.config import settings
 from app.services.paymentservice import PaymentService
 from app.services.smsservice import send_message
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 API_LOGIN_ID = settings.API_LOGIN_ID
 TRANSACTION_KEY = settings.TRANSACTION_KEY
@@ -133,7 +138,9 @@ class RefundService:
         trans_id: str,
     ) -> Refund | None:
         result = await self.db.execute(
-            select(Refund).where(Refund.refund_transaction_id == trans_id)
+            select(Refund)
+            .options(selectinload(Refund.order))
+            .where(Refund.refund_transaction_id == trans_id)
         )
         return result.scalar_one_or_none()
     
@@ -216,7 +223,11 @@ class RefundService:
                 f"Your refund for order #{refund.order.order_number} is currently under review. "
                 "We will notify you once the refund is completed."
             )
-            await send_message(message, refund.order.receiver_phone)
+            try:
+                await send_message(message, refund.order.receiver_phone)
+            except Exception as exc:
+                    # Log SMS failure, but don't fail the webhook
+                    logger.exception("Failed to send refund SMS: %s", exc)
             
         else:
             refund.status = RefundStatus.FAILED.value

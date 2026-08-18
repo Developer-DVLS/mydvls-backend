@@ -304,3 +304,14 @@ class OrderService:
         order = result.scalars().first()
 
         return order
+    
+    async def get_order_by_trans_id(self, trans_id):
+        result = await self.db.execute(
+            select(Order)
+            .options(
+                selectinload(Order.items)
+                .selectinload(OrderItem.product_variant)
+                )
+            .where(Order.payment_intent_id == trans_id)
+        )
+        return result.scalar_one_or_none()

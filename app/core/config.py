@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     API_LOGIN_ID: str = os.getenv('API_LOGIN_ID', '')
     TRANSACTION_KEY: str = os.getenv('TRANSACTION_KEY', '')
     ENDPOINT_URL: str = os.getenv('ENDPOINT_URL', '')
+    AUTHORIZE_SIGNATURE_KEY: str = os.getenv('AUTHORIZE_SIGNATURE_KEY', '')
     
     ##teams alert 
     TEAMS_ALERT_URL: str = os.getenv('TEAMS_ALERT_URL', '')

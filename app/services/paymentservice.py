@@ -10,7 +10,12 @@ from app.core.config import settings
 from app.models.carts import CartStatus
 from app.models.orders import Order
 from app.core.database import get_db
+from app.services.smsservice import send_message
 from app.utils.cache import delete_cache
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 API_LOGIN_ID = settings.API_LOGIN_ID
@@ -130,7 +135,7 @@ class PaymentService:
                         # delete cart cookie
                         response.delete_cookie(key=SESSION_COOKIE_KEY)
                 
-                #5. update inventory
+                #update inventory
                 for ordered_item in order.items:
                     product_variant = ordered_item.product_variant
                     #update
@@ -138,6 +143,16 @@ class PaymentService:
                 
                 await db.commit()
                 await db.refresh(order) 
+                
+                sms_message = (
+                    f"Payment for order #{order.order_number} "
+                    "is currently under review. You will be notified when there is an update."
+                )
+                try:
+                    await send_message(sms_message, order.receiver_phone)
+                except Exception as exc:
+                    # Log SMS failure, but don't fail the webhook
+                    logger.exception("Failed to send refund SMS: %s", exc)
                 
                 raise HTTPException(
                     status_code=202,
