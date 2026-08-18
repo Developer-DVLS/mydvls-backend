@@ -1,6 +1,6 @@
 from fastapi import APIRouter,  Depends, HTTPException, BackgroundTasks, Response, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from sqlalchemy.orm import selectinload
@@ -16,7 +16,7 @@ from app.services.smsservice import send_message
 from app.utils.cache import get_cache
 from app.utils.send_email import send_email
 from app.services.cartservice import CartService
-from app.utils.validators import is_valid_phone
+from app.utils.validators import is_valid_phone, normalize_phone
 from app.utils.limiter import limiter
 
 user_router = APIRouter(prefix="/users", tags=['User auth'])
@@ -44,70 +44,122 @@ async def user_register(
     )
     
     try:
-        # Check if email already exists
-        existing_user = await db.execute(
-        select(User).filter(User.email == data.email.lower())
-        )
-        existing_user = existing_user.scalars().first()
-        if existing_user:
-            raise HTTPException(
-                status_code=400, 
-                detail="Email already registered"
-                )
-        
-        # Check if phone number already exists
-        #check if phone number validity
+        email = data.email.lower()
+
+        # Validate phone
         if not is_valid_phone(data.phone):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid phone number"
             )
-            
-        existing_user = await db.execute(
-        select(User).filter(User.phone == data.phone)
-        )
-        existing_user = existing_user.scalars().first()
-        if existing_user:
-            raise HTTPException(
-                status_code=400, 
-                detail="User with this phone already registered"
+        # normalize phone number
+        data.phone = normalize_phone(data.phone)
+                
+        # Find users by email and phone.
+        # Include both CUSTOMER and GUEST_CUSTOMER.
+        result = await db.execute(
+            select(User).where(
+                User.role.in_([
+                    UserRole.CUSTOMER.value,
+                    UserRole.GUEST_CUSTOMER.value
+                ]), 
+                or_(
+                    func.lower(User.email) == email,
+                    User.phone == data.phone
                 )
-            
-        # hash password
-        password_hash = hash_password("PASSWORD")
-        
-        #create user
-        new_user = User(
-            first_name=data.first_name, 
-            last_name=data.last_name,
-            user_name=data.first_name + "_" + data.last_name,
-            email=func.lower(data.email),   #lowercase the email before adding in db
-            phone=data.phone,
-            password=password_hash,
-            role=UserRole.CUSTOMER,
-            is_email_verified=False,
-            is_phone_verified=False
+            )
         )
-        db.add(new_user)
-        await db.commit()
-        await db.refresh(new_user)
 
-        # otp verification
-        #generate otp
+        users = result.scalars().all()
+
+        email_user = next(
+            (user for user in users
+            if user.email and user.email.lower() == email),
+            None
+        )
+
+        phone_user = next(
+            (user for user in users
+            if user.phone == data.phone),
+            None
+        )
+
+        # Email and phone belong to different users
+        if email_user and phone_user and email_user.id != phone_user.id:
+            raise HTTPException(
+                status_code=400,
+                detail="Email or phone number is already registered with another account"
+            )
+
+        existing_user = email_user or phone_user
+
+        # Existing customer
+        if existing_user:
+            if existing_user.role == UserRole.CUSTOMER.value:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Email or phone number is already registered"
+                )
+
+            # Existing guest -> convert to customer
+            existing_user.first_name = data.first_name
+            existing_user.last_name = data.last_name
+            existing_user.user_name = (
+                f"{data.first_name}_{data.last_name}"
+            )
+            existing_user.email = email
+            existing_user.phone = data.phone
+            existing_user.password = hash_password("PASSWORD")
+            existing_user.role = UserRole.CUSTOMER.value
+            existing_user.is_email_verified = False
+            existing_user.is_phone_verified = False
+
+            await db.commit()
+            await db.refresh(existing_user)
+
+            new_user = existing_user
+
+        else:
+            # Create new customer
+            password_hash = hash_password("PASSWORD")
+
+            new_user = User(
+                first_name=data.first_name,
+                last_name=data.last_name,
+                user_name=f"{data.first_name}_{data.last_name}",
+                email=email,
+                phone=data.phone,
+                password=password_hash,
+                role=UserRole.CUSTOMER.value,
+                is_email_verified=False,
+                is_phone_verified=False
+            )
+
+            db.add(new_user)
+
+            await db.commit()
+            await db.refresh(new_user)
+
+        # OTP verification
         otp = OTPService.generate_otp()
-        
-        #send sms 
-        message = (f"Your verification code is {otp}. "
-                "It expires in 5 minutes. Do not share it with anyone.")
+
+        message = (
+            f"Your verification code is {otp}. "
+            "It expires in 5 minutes. Do not share it with anyone."
+        )
+
         await send_message(message, new_user.phone)
-        
-        #save otp
+
         await OTPService.save_otp(new_user.phone, otp)
-        
+
         return new_user
-    except HTTPException as e:
-        raise 
+
+    except HTTPException:
+        raise
+
     except Exception as e:
+        await db.rollback()
+
         raise HTTPException(
             status_code=500,
             detail=f"Failed to create user: {str(e)}"
@@ -126,6 +178,8 @@ async def verify_otp(
                 status_code=400,
                 detail="Invalid phone number"
             )
+    # normalize phone number
+    normalize_phone(data.phone)
             
     # verify otp 
     await OTPService.verify_otp(data.phone, data.otp) 
@@ -178,6 +232,8 @@ async def resend_otp(
                 status_code=400,
                 detail="Invalid phone number"
             )
+    # normalize phone number
+    normalize_phone(data.phone)
     
     response = await OTPService.resend_otp(data.phone)
     if response:
@@ -197,6 +253,8 @@ async def send_login_otp(
                 status_code=400,
                 detail="Invalid phone number"
             )
+    # normalize phone number
+    normalize_phone(data.phone)
     
     result = await db.execute(
         select(User).where(User.phone == data.phone)

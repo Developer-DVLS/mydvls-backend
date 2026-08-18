@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 
 from fastapi import HTTPException
@@ -7,6 +8,8 @@ import httpx
 
 from app.models.refunds import Refund, RefundStatus
 from app.core.config import settings
+from app.services.paymentservice import PaymentService
+from app.services.smsservice import send_message
 
 API_LOGIN_ID = settings.API_LOGIN_ID
 TRANSACTION_KEY = settings.TRANSACTION_KEY
@@ -103,6 +106,9 @@ class RefundService:
         refund payload.
         """
         transaction = await self.get_transaction_details(transaction_id)
+        
+        if transaction and transaction.get("transactionStatus") != "settledSuccessfully":
+            raise HTTPException(status_code=400, detail="Refund cannot be processed yet. Payment for this order is still being processed.")
 
         credit_card = transaction.get("payment", {}).get("creditCard", {})
         card_number = credit_card.get("cardNumber")
@@ -130,3 +136,99 @@ class RefundService:
             select(Refund).where(Refund.refund_transaction_id == trans_id)
         )
         return result.scalar_one_or_none()
+    
+    async def process_refund(
+        self,
+        refund,
+        ):
+        try:
+            authorize_net = PaymentService()
+
+            response = await authorize_net.refund(
+                amount=refund.amount,
+                original_transaction_id=(
+                    refund.original_transaction_id
+                ),
+                card_last4=refund.card_last4,
+            )
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            # We genuinely don't know if Authorize.Net processed this.
+            # Do NOT mark as FAILED — that invites a duplicate refund.
+            refund.status = RefundStatus.PENDING_RECONCILIATION.value
+            refund.gateway_error = f"No response from gateway: {exc}"
+            await self.db.commit()
+            raise HTTPException(
+                status_code=502,
+                detail="Refund status unknown, pending reconciliation.",
+            )
+
+        except Exception as exc:
+            refund.status = RefundStatus.FAILED.value
+            refund.gateway_error = str(exc)
+            await self.db.commit()
+
+            raise HTTPException(
+                status_code=502,
+                detail="Authorize.Net refund request failed.",
+            )
+
+        # ---------------------------------------------------------
+        # Parse Authorize.Net response
+        # ---------------------------------------------------------
+
+        transaction_response = response.get("transactionResponse", {})
+        response_code = transaction_response.get("responseCode")
+        top_level_messages = response.get("messages", {})
+
+        # ---------------------------------------------------------
+        # Success / Failure
+        # ---------------------------------------------------------
+
+        if response_code == "1":
+            refund.status = RefundStatus.SUCCEEDED.value
+            refund.refund_transaction_id = (
+                transaction_response.get("transId")
+            )
+            refund.gateway_response_code = (
+                response_code
+            )
+            refund.completed_at = datetime.utcnow()
+
+            await self.db.commit()
+            await self.db.refresh(refund)
+            
+            #send sms 
+            message = (f"Your refund for order #{refund.order.order_number} has been successfully processed. "
+                        "Please allow some time for the amount to appear in your account.")
+            await send_message(message, refund.order.receiver_phone)
+
+            return refund
+        elif response_code == "4":
+            refund.status = RefundStatus.PENDING_REVIEW.value
+            refund.gateway_response_code = response_code
+            refund.gateway_error = str(
+                transaction_response.get("errors")
+                or transaction_response.get("messages")
+                or "Held for review"
+            )
+            
+            message = (
+                f"Your refund for order #{refund.order.order_number} is currently under review. "
+                "We will notify you once the refund is completed."
+            )
+            await send_message(message, refund.order.receiver_phone)
+            
+        else:
+            refund.status = RefundStatus.FAILED.value
+            refund.gateway_response_code = response_code
+            refund.gateway_error = str(
+                transaction_response.get("errors")
+                or transaction_response.get("messages")
+                or top_level_messages.get("message")
+                or "Unknown gateway error"
+            )
+
+        await self.db.commit()
+        await self.db.refresh(refund)
+        
+        return refund

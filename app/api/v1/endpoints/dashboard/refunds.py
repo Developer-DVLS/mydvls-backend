@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 
 from app.api.v1.schemas.refund import PaginatedRefundResponse, RefundCreate, RefundReject, RefundResponse
@@ -143,6 +144,7 @@ async def admin_process_refund(
 
     result = await db.execute(
         select(Refund)
+        .options(selectinload(Refund.order))
         .where(
             Refund.id == refund_id
         )
@@ -201,85 +203,204 @@ async def admin_process_refund(
     await db.commit()
 
     # ---------------------------------------------------------
-    # Authorize.Net
+    # process refund in Authorize.Net
     # ---------------------------------------------------------
 
-    try:
-        authorize_net = PaymentService()
+    refund_service = RefundService(db)
+    refund = await refund_service.process_refund(refund)
 
-        response = await authorize_net.refund(
-            amount=refund.amount,
-            original_transaction_id=(
-                refund.original_transaction_id
-            ),
-            card_last4=refund.card_last4,
+    return refund
+
+
+@admin_refund_router.post(
+    "/orders/{order_id}/",
+    response_model=RefundResponse,
+)
+async def create_process_refund_request(
+    order_id: int,
+    data: RefundCreate,
+    current_user: User = Depends(admin_only),
+    db: AsyncSession = Depends(get_db),
+):
+    refund_service = RefundService(db)
+    
+    # ---------------------------------------------------------
+    # Get order
+    # ---------------------------------------------------------
+
+    result = await db.execute(
+        select(Order)
+        .options(selectinload(Order.user))
+        .where(
+            Order.id == order_id
         )
-    except (httpx.TimeoutException, httpx.TransportError) as exc:
-        # We genuinely don't know if Authorize.Net processed this.
-        # Do NOT mark as FAILED — that invites a duplicate refund.
-        refund.status = RefundStatus.PENDING_RECONCILIATION.value
-        refund.gateway_error = f"No response from gateway: {exc}"
-        await db.commit()
+    )
+
+    order = result.scalar_one_or_none()
+
+    if not order:
         raise HTTPException(
-            status_code=502,
-            detail="Refund status unknown, pending reconciliation.",
+            status_code=404,
+            detail="Order not found.",
         )
+    
+    # ---------------------------------------------------------
+    # Check for existing pending refund
+    # ---------------------------------------------------------
+    await refund_service.existing_pending_check(order.id, order.user)
 
-    except Exception as exc:
-        refund.status = RefundStatus.FAILED.value
-        refund.gateway_error = str(exc)
-        await db.commit()
+    # ---------------------------------------------------------
+    # Validate order/payment
+    # ---------------------------------------------------------
 
+    if order.payment_status != "paid":
         raise HTTPException(
-            status_code=502,
-            detail="Authorize.Net refund request failed.",
+            status_code=400,
+            detail="Only paid orders can be refunded.",
+        )
+
+    if not order.payment_intent_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Payment transaction not found.",
         )
 
     # ---------------------------------------------------------
-    # Parse Authorize.Net response
+    # Calculate previous successful refunds
+    # ---------------------------------------------------------
+    
+    previous_refunded = (
+        await refund_service.get_previous_refunded_amount(
+            order.id
+        )
+    )
+
+    original_amount = Decimal(
+        str(order.total)
+    )
+
+    remaining_amount = (
+        original_amount - previous_refunded
+    )
+
+    # ---------------------------------------------------------
+    # Validate refund amount
     # ---------------------------------------------------------
 
-    transaction_response = response.get("transactionResponse", {})
-    response_code = transaction_response.get("responseCode")
-    top_level_messages = response.get("messages", {})
+    if data.amount > remaining_amount:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "type": "refund_amount_exceeded",
+                "message": (
+                    f"Maximum refundable amount is "
+                    f"{remaining_amount:.2f}."
+                ),
+            },
+        )
 
     # ---------------------------------------------------------
-    # Success / Failure
+    # Determine full / partial
     # ---------------------------------------------------------
 
-    if response_code == "1":
-        refund.status = RefundStatus.SUCCEEDED.value
-        refund.refund_transaction_id = (
-            transaction_response.get("transId")
-        )
-        refund.gateway_response_code = (
-            response_code
-        )
-        refund.completed_at = datetime.utcnow()
+    refund_type = (
+        RefundType.FULL.value
+        if data.amount == remaining_amount
+        else RefundType.PARTIAL.value
+    )
+    
+    # ---------------------------------------------------------
+    # Get card number
+    # ---------------------------------------------------------
+    card_info = await refund_service.get_refund_card_info(
+        order.payment_intent_id
+    )
 
-        await db.commit()
-        await db.refresh(refund)
+    card_last4 = card_info["card_last4"]
 
-        return refund
-    elif response_code == "4":
-        refund.status = RefundStatus.PENDING_REVIEW.value
-        refund.gateway_response_code = response_code
-        refund.gateway_error = str(
-            transaction_response.get("errors")
-            or transaction_response.get("messages")
-            or "Held for review"
-        )
-    else:
-        refund.status = RefundStatus.FAILED.value
-        refund.gateway_response_code = response_code
-        refund.gateway_error = str(
-            transaction_response.get("errors")
-            or transaction_response.get("messages")
-            or top_level_messages.get("message")
-            or "Unknown gateway error"
-        )
+    # ---------------------------------------------------------
+    # Create refund
+    # ---------------------------------------------------------
+
+    refund = Refund(
+        order_id=order.id,
+
+        user_id=current_user.id,
+
+        refund_type=refund_type,
+
+        status=RefundStatus.PENDING.value,
+
+        amount=data.amount,
+
+        original_amount=original_amount,
+
+        previous_refunded_amount=previous_refunded,
+
+        original_transaction_id=(
+            order.payment_intent_id
+        ),
+
+        card_last4=card_last4,
+
+        reason=data.reason,
+    )
+
+    db.add(refund)
 
     await db.commit()
     await db.refresh(refund)
+    
+    # ---------------------------------------------------------
+    # Process refund
+    # ---------------------------------------------------------
+    
+    refund_result = await db.execute(
+        select(Refund)
+        .options(
+            selectinload(Refund.order)
+            )
+        .where(Refund.id == refund.id)
+    )
+    refund = refund_result.scalars().first()
+    
+
+    # ---------------------------------------------------------
+    # Validate Authorize.Net information
+    # ---------------------------------------------------------
+
+    if not refund.original_transaction_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Original Authorize.Net "
+                "transaction ID not found."
+            ),
+        )
+
+    if not refund.card_last4:
+        raise HTTPException(
+            status_code=400,
+            detail="Card last four digits not found.",
+        )
+
+    # ---------------------------------------------------------
+    # Mark processing
+    # ---------------------------------------------------------
+
+    refund.status = RefundStatus.PROCESSING.value
+
+    refund.processed_by_id = current_user.id
+
+    refund.processed_at = datetime.utcnow()
+
+    await db.commit()
+
+    # ---------------------------------------------------------
+    # process refund in Authorize.Net
+    # ---------------------------------------------------------
+
+    refund_service = RefundService(db)
+    refund = await refund_service.process_refund(refund)
 
     return refund

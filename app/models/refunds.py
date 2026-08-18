@@ -45,7 +45,7 @@ class Refund(Base):
     # Order being refunded
     order_id = Column(Integer, ForeignKey(
         "orders.id", ondelete="CASCADE"), nullable=False)
-    # Customer requesting the refund
+    # Customer/admin requesting the refund
     user_id = Column(UUID(as_uuid=True), ForeignKey(
         "users.id", ondelete="SET NULL"), nullable=True, index=True)
     # Admin who approved/processed the refund
