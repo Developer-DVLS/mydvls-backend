@@ -45,6 +45,7 @@ from app.api.v1.endpoints.address import user_address_router
 from app.api.v1.endpoints.dashboard.address import admin_address_router
 from app.api.v1.endpoints.refund import user_refund_router
 from app.api.v1.endpoints.dashboard.refunds import admin_refund_router
+from app.api.v1.endpoints.authorize_webhook import webhook_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -112,6 +113,7 @@ app.include_router(user_address_router)
 app.include_router(admin_address_router)
 app.include_router(user_refund_router)
 app.include_router(admin_refund_router)
+app.include_router(webhook_router)
 
 # =========================
 # CORS CONFIGURATION

@@ -15,7 +15,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+webhook_router = APIRouter()
 
 AUTHORIZE_SIGNATURE_KEY = settings.AUTHORIZE_SIGNATURE_KEY
 
@@ -31,7 +31,7 @@ def verify_signature(raw_body: bytes, signature_header: str) -> bool:
     return hmac.compare_digest(computed.lower(), expected_sig.lower())
 
 
-@router.post("/webhooks/authorize-net")
+@webhook_router.post("/webhooks/authorize-net")
 async def handle_authorize_net_webhook(request: Request, db=Depends(get_db)):
     raw_body = await request.body()
     signature = request.headers.get("X-ANET-Signature", "")
