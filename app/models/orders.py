@@ -123,6 +123,39 @@ class Order(Base):
     confirmed_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
+    
+    @property
+    def full_shipping_address(self):
+        lines = []
+
+        if self.shipping_address_line_1:
+            lines.append(self.shipping_address_line_1.strip())
+
+        if self.shipping_address_line_2:
+            lines.append(self.shipping_address_line_2.strip())
+
+        city_state_zip = " ".join(
+            filter(
+                None,
+                [
+                    ", ".join(
+                        filter(None, [
+                            self.shipping_city,
+                            self.shipping_state,
+                        ])
+                    ),
+                    self.shipping_postal_code,
+                ],
+            )
+        )
+
+        if city_state_zip:
+            lines.append(city_state_zip)
+
+        if self.shipping_country:
+            lines.append(self.shipping_country)
+
+        return ", ".join(lines)
 
 
 class OrderItem(Base):

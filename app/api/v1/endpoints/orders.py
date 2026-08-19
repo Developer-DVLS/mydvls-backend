@@ -127,7 +127,8 @@ async def create_order(
                      template_name='order/placed.html',
                      context={
                         'order': order,
-                        'ordered_items': ordered_items
+                        'ordered_items': ordered_items,
+                        'order_number': str(order.order_number)[:8]
                      }
                      )
         

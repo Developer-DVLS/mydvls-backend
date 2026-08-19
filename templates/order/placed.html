@@ -7,7 +7,7 @@
     <style>
       body {
         font-family: Arial, sans-serif;
-        background-color: #fbeff2;
+        background-color: #ffffff;
         margin: 0;
         padding: 0;
       }
@@ -21,9 +21,15 @@
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
       }
       .header {
-        background-color: #0062fb;
+        background-color: #2c4d7b;
         text-align: center;
         padding: 20px;
+      }
+      .header-content {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
       }
       .header h1 {
         margin: 0;
@@ -56,15 +62,28 @@
   <body>
     <div class="container">
       <div class="header">
-        <h1>Your order has been placed</h1>
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
+          <tr>
+            <td style="width: 120px; vertical-align: middle; text-align: right; padding-right: 15px;">
+              <img src="https://lh3.googleusercontent.com/d/1gOLkJKLPNmkDz-UtShyez6y7wNYHxVxg" alt="Company Logo" width="100" height="60" style="display: block; object-fit: contain;" />
+            </td>
+
+            <td style="vertical-align: middle; text-align: left;">
+              <h1 style="margin: 0; font-size: 26px; color: #ffffff;">Your Order Has Been Placed</h1>
+            </td>
+          </tr>
+        </table>
       </div>
       <div class="content">
-        <p>Hi {{ order.receiver_first_name }},</p>
-        <p>Thank you for your order!</p>
-        <p>We’re happy to let you know that your order #{{ order.order_number }}
-          has been successfully placed and received.</p>
+        <div style="line-height: 0.5;">
+          <p>Hi {{ order.receiver_first_name }},</p>
+          <p>Thank you for your order! We've received your order and are processingit.</p>
 
-        <h2>Order Items</h2>
+          <p style="margin-top: 50px;">Order #{{ order_number }}</p>
+          <p>{{ order.created_at }}</p>
+        </div>
+
+        <h2>Order Details</h2>
         <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin-top: 20px;">
           <thead>
             <tr>
@@ -113,6 +132,21 @@
           </tr>
         </table>
       </div>
+      <div class="content">
+        <p style="font-weight: bolder;">PAYMENT</p>
+        <p>Payment Status: {{ order.payment_status }}</p>
+        <p>Payment Method: {{ order.payment_method }}</p>
+        <p style="font-weight: bolder;">SHIPPING INFORMATION</p>
+        <p>Customer Name: {{ order.shipping_full_name }}</p>
+        <p>Address: {{ order.full_shipping_address }}</p>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: center; font-size: 12px;">
+        <p>
+          Have questions?
+          <a href="mailto:support@mydvls.com" style="color: inherit; text-decoration: none;">Contact our support team</a>
+        </p>
+      </div>
+
       <div class="footer">&copy; Delta V Logic and Solutions. All rights reserved.</div>
     </div>
   </body>
