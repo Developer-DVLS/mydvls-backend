@@ -281,13 +281,13 @@ async def get_invoice(
 
             # find or create row
             row = next(
-                (r for r in breakdown if r["order_item_id"] == order_item['id']),
+                (r for r in breakdown if r["order_item_id"] == order_item['order_item_id']),
                 None
             )
 
             if not row:
                 row = {
-                    "order_item_id": order_item['id'],
+                    "order_item_id": order_item['order_item_id'],
                     "product_variant_id": product_variant_id,
                     "quantity": order_item['quantity'],
                     "combo_quantity": 0,
