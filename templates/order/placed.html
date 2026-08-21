@@ -80,7 +80,7 @@
           <p>Thank you for your order! We've received your order and are processingit.</p>
 
           <p style="margin-top: 50px;">Order #{{ order_number }}</p>
-          <p>{{ order.created_at }}</p>
+          <p>{{ order.created_at.format('j F, Y') }}</p>
         </div>
 
         <h2>Order Details</h2>
