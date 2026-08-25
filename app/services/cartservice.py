@@ -922,6 +922,7 @@ class CartService:
         # Normalize EVERYTHING first
         cart = self.normalize_cart(cart)
         if not cart.cart_products:
+            cart = await self.remove_applied_coupon(request, db, user_id, cart)
             return cart
         
         #check stock
