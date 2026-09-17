@@ -69,7 +69,7 @@ async def create_order(
         result = await payment_service.charge_card(request, payment=payment_payload, db=db)
         
         #3. Post payment processes
-        order = order_service.process_post_order_tasks(
+        order = await order_service.process_post_order_tasks(
             request=request,
             response=response,
             order=order,

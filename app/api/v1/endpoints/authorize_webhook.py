@@ -96,7 +96,7 @@ async def handle_authorize_net_webhook(
         if event_type == "net.authorize.payment.authcapture.created":
             if order.payment_status != "paid":
                 order_service = OrderService(db)
-                order_service.process_post_order_tasks(
+                await order_service.process_post_order_tasks(
                     request=request,
                     response=response,
                     order=order,
