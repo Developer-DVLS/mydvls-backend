@@ -1,7 +1,7 @@
 from datetime import datetime
 import hashlib
 import hmac
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, Response, BackgroundTasks
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -32,7 +32,12 @@ def verify_signature(raw_body: bytes, signature_header: str) -> bool:
 
 
 @webhook_router.post("/webhooks/authorize-net")
-async def handle_authorize_net_webhook(request: Request, db=Depends(get_db)):
+async def handle_authorize_net_webhook(
+    request: Request, 
+    response: Response,
+    background_tasks: BackgroundTasks,
+    db=Depends(get_db)
+):
     raw_body = await request.body()
     signature = request.headers.get("X-ANET-Signature", "")
 
@@ -88,28 +93,41 @@ async def handle_authorize_net_webhook(request: Request, db=Depends(get_db)):
     if order:
         sms_message = None
         
-        if event_type == "net.authorize.payment.fraud.approved":
-            order.payment_status = "paid" 
-            
-            sms_message = (
-                f"Payment for order #{order.order_number} "
-                "has been approved."
-            )
+        if event_type == "net.authorize.payment.authcapture.created":
+            if order.payment_status != "paid":
+                order_service = OrderService(db)
+                order_service.process_post_order_tasks(
+                    request=request,
+                    response=response,
+                    order=order,
+                    transaction_id=trans_id,
+                    background_tasks=background_tasks
+                )
+        
+        elif event_type == "net.authorize.payment.fraud.approved":
+            if order.payment_status != "paid":
+                order.payment_status = "paid" 
+                
+                sms_message = (
+                    f"Payment for order #{order.order_number} "
+                    "has been approved."
+                )
 
         elif event_type == "net.authorize.payment.fraud.declined":
-            order.status = OrderStatus.CANCELLED.value
-            order.payment_status = "failed"
-            
-            #update inventory
-            for ordered_item in order.items:
-                product_variant = ordered_item.product_variant
-                #update
-                product_variant.stock_quantity += ordered_item.quantity
+            if order.payment_status != "failed":
+                order.status = OrderStatus.CANCELLED.value
+                order.payment_status = "failed"
+                
+                #update inventory
+                for ordered_item in order.items:
+                    product_variant = ordered_item.product_variant
+                    #update
+                    product_variant.stock_quantity += ordered_item.quantity
 
-            sms_message = (
-                f"Payment for order #{order.order_number} "
-                "was declined. Your order has been cancelled."
-            )
+                sms_message = (
+                    f"Payment for order #{order.order_number} "
+                    "was declined. Your order has been cancelled."
+                )
             
         await db.commit()
         if sms_message:

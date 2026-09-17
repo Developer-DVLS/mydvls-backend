@@ -68,74 +68,14 @@ async def create_order(
         }
         result = await payment_service.charge_card(request, payment=payment_payload, db=db)
         
-        #3. Update order payment status
-        order.payment_intent_id = result["transactionId"]
-        order.payment_status = "paid"
-        order.payment_method = "authorizenet"
-                
-        #4. update cart status
-        # if cart exists in order, it means it is registered user's order else guest user
-        # so delete redis cart
-        if order.cart_id:
-            order.cart.status = CartStatus.ORDERED
-        else:
-            # get redis cache key from cookie
-            redis_cache_key = request.cookies.get(SESSION_COOKIE_KEY)
-            if redis_cache_key:
-                # delete cart from redis cache
-                await delete_cache(redis_cache_key)
-                # delete cart cookie
-                response.delete_cookie(key=SESSION_COOKIE_KEY)
-
-        #5. update inventory
-        for ordered_item in order.items:
-            product_variant = ordered_item.product_variant
-            #update
-            product_variant.stock_quantity -= ordered_item.quantity
-        
-        await db.commit()
-        await db.refresh(order) 
-        
-        
-        # 6. send order placed email / sms
-        order_result = await db.execute(
-            select(Order)
-            .options(
-                selectinload(Order.user),
-                selectinload(Order.cart),
-                selectinload(Order.items)
-                .selectinload(OrderItem.product_variant)
-                .selectinload(ProductVariant.product)
-            )
-            .where(Order.id == order.id)
+        #3. Post payment processes
+        order = order_service.process_post_order_tasks(
+            request=request,
+            response=response,
+            order=order,
+            transaction_id=result["transactionId"],
+            background_tasks=background_tasks
         )
-        order = order_result.scalar_one_or_none()
-
-        ordered_items = [
-            {
-                "product_name": item.product_variant.product.name,
-                "sku": item.product_variant.sku,
-                "quantity": item.quantity,
-                "unit_price": item.unit_price,
-                "total_price": item.total_price,
-            }
-            for item in order.items
-        ]
-        await send_email(background_tasks=background_tasks,
-                     subject="Order Placed successfully.",
-                     recipients=[order.receiver_email],
-                     template_name='order/placed.html',
-                     context={
-                        'order': order,
-                        'ordered_items': ordered_items,
-                        'order_number': str(order.order_number)[:8]
-                     }
-                     )
-        
-        message = (f"Order #{str(order.order_number)[-8:]} placed successfully! "
-                   "Your order has been received. "
-                   f"Total: ${order.total}. We'll notify you when it is confirmed.")
-        await send_message(message, order.receiver_phone)
         
         return {
             "order_id": order.id, 

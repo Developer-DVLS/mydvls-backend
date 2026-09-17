@@ -1,6 +1,6 @@
 from typing import Optional
 import uuid
-from fastapi import HTTPException, Request, Response
+from fastapi import BackgroundTasks, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, raiseload
@@ -9,13 +9,18 @@ from app.api.v1.endpoints.cart import get_cart
 from app.api.v1.schemas.carts import CartResponse
 from app.api.v1.schemas.orders import OrderBillingAddressBase, OrderCreate, OrderShippingAddressBase
 from app.models.address import Address
-from app.models.carts import CartProduct
+from app.models.carts import CartProduct, CartStatus
 from app.models.offers import Offer, OfferType
 from app.models.orders import AppliedCombo, Order, OrderItem
 from app.models.products import Product, ProductVariant
 from app.models.user import User, UserRole
 from app.services.cartservice import CartService
+from app.services.smsservice import send_message
 from app.services.userservice import UserService
+from app.utils.cache import delete_cache
+from app.utils.send_email import send_email
+
+SESSION_COOKIE_KEY = "guest_cart"
 
 class OrderService:
 
@@ -315,3 +320,84 @@ class OrderService:
             .where(Order.payment_intent_id == trans_id)
         )
         return result.scalar_one_or_none()
+    
+    async def process_post_order_tasks(
+        self, 
+        request,
+        response,
+        order, 
+        transaction_id,
+        background_tasks: BackgroundTasks,
+    ):
+        #1. Update order payment status
+        order.payment_intent_id = transaction_id
+        order.payment_status = "paid"
+        order.payment_method = "authorizenet"
+                
+        #2. update cart status
+        # if cart exists in order, it means it is registered user's order else guest user
+        # so delete redis cart
+        if order.cart_id:
+            order.cart.status = CartStatus.ORDERED
+        else:
+            # get redis cache key from cookie
+            redis_cache_key = request.cookies.get(SESSION_COOKIE_KEY)
+            if redis_cache_key:
+                # delete cart from redis cache
+                await delete_cache(redis_cache_key)
+                # delete cart cookie
+                response.delete_cookie(key=SESSION_COOKIE_KEY)
+
+        #3. update inventory
+        for ordered_item in order.items:
+            product_variant = ordered_item.product_variant
+            #update
+            product_variant.stock_quantity -= ordered_item.quantity
+        
+        await self.db.commit()
+        await self.db.refresh(order) 
+        
+        
+        # 4. send order placed email / sms
+        order_result = await self.db.execute(
+            select(Order)
+            .options(
+                selectinload(Order.user),
+                selectinload(Order.cart),
+                selectinload(Order.items)
+                .selectinload(OrderItem.product_variant)
+                .selectinload(ProductVariant.product)
+            )
+            .where(Order.id == order.id)
+        )
+        order = order_result.scalar_one_or_none()
+
+        ordered_items = [
+            {
+                "product_name": item.product_variant.product.name,
+                "sku": item.product_variant.sku,
+                "quantity": item.quantity,
+                "unit_price": item.unit_price,
+                "total_price": item.total_price,
+            }
+            for item in order.items
+        ]
+        await send_email(
+            background_tasks=background_tasks,
+            subject="Order Placed successfully.",
+            recipients=[order.receiver_email],
+            template_name='order/placed.html',
+            context={
+            'order': order,
+            'ordered_items': ordered_items,
+            'order_number': str(order.order_number)[:8]
+            }
+        )
+        
+        message = (f"Order #{str(order.order_number)[-8:]} placed successfully! "
+                   "Your order has been received. "
+                   f"Total: ${order.total}. We'll notify you when it is confirmed.")
+        await send_message(message, order.receiver_phone)
+        
+        return order
+        
