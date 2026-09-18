@@ -91,7 +91,7 @@ class OrderService:
         
         coupon_code = None
         coupon = None
-        if user and cart.coupon_id:
+        if cart.coupon_id:
             coupon_result = await self.db.execute(
                 select(Offer).where(Offer.id == cart.coupon_id)
             )
