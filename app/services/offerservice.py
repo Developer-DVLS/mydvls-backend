@@ -272,19 +272,19 @@ def resolve_offer(
 
 # get active offer based on item 
 # the priorirty of offers based on types: 
-# 1 = Item offer
+# 1 = bogo offer
 # 2 = Category offer
 # 3 = Store offer
-# 4 = bogo offer
+# 4 = Item offer
 #  1 being the highest priority
 async def get_active_offer_by_item(db, item_id: int):
     """
     Offer priority:
 
-    1. ITEM offer
+    1. BOGO offer
     2. CATEGORY offer
     3. STORE offer
-    4. BOGO offer
+    4. Item offer
 
     Returns first matching active offer based on priority.
     """
@@ -304,7 +304,38 @@ async def get_active_offer_by_item(db, item_id: int):
     
     now = datetime.utcnow()
     
-    # 2. ITEM OFFER (highest priority)
+    # 2. BOGO OFFER (highest priority)
+    bogo_offer_query = (
+        select(Offer)
+        .join(OfferBOGO)
+        .options(
+            selectinload(Offer.targets),
+            selectinload(Offer.bogo_meta),
+        )
+        .where(
+            and_(
+                Offer.is_active == True,
+                Offer.start_date <= now,
+                Offer.end_date >= now,
+                Offer.deleted_at.is_(None),
+
+                Offer.type == OfferType.BOGO,
+
+                OfferBOGO.buy_item_id == item_id,
+                OfferBOGO.deleted_at.is_(None)
+            )
+        )
+        .order_by(Offer.created_at.desc())
+    )
+
+    bogo_offer = (
+        await db.execute(bogo_offer_query)
+    ).scalars().first()
+
+    if bogo_offer:
+        return bogo_offer
+    
+    # 3. ITEM OFFER 
     item_offer_query = (
         select(Offer)
         .join(OfferTarget)
@@ -336,7 +367,7 @@ async def get_active_offer_by_item(db, item_id: int):
     if item_offer:
         return item_offer
 
-    # 3. CATEGORY OFFER
+    # 4. CATEGORY OFFER
     category_offer_query = (
         select(Offer)
         .join(OfferTarget)
@@ -368,7 +399,7 @@ async def get_active_offer_by_item(db, item_id: int):
     if category_offer:
         return category_offer
 
-    # 4. STORE OFFER
+    # 5. STORE OFFER
     store_offer_query = (
         select(Offer)
         .options(
@@ -394,37 +425,6 @@ async def get_active_offer_by_item(db, item_id: int):
 
     if store_offer:
         return store_offer
-
-    # 5. BOGO OFFER
-    bogo_offer_query = (
-        select(Offer)
-        .join(OfferBOGO)
-        .options(
-            selectinload(Offer.targets),
-            selectinload(Offer.bogo_meta),
-        )
-        .where(
-            and_(
-                Offer.is_active == True,
-                Offer.start_date <= now,
-                Offer.end_date >= now,
-                Offer.deleted_at.is_(None),
-
-                Offer.type == OfferType.BOGO,
-
-                OfferBOGO.buy_item_id == item_id,
-                OfferBOGO.deleted_at.is_(None)
-            )
-        )
-        .order_by(Offer.created_at.desc())
-    )
-
-    bogo_offer = (
-        await db.execute(bogo_offer_query)
-    ).scalars().first()
-
-    if bogo_offer:
-        return bogo_offer
 
     # No offer found
     return None

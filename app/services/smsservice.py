@@ -1,6 +1,10 @@
 import requests
 from app.core.config import settings
+import httpx
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 async def send_message(message, phone_number, schedule=False):
     """
@@ -19,10 +23,15 @@ async def send_message(message, phone_number, schedule=False):
         'Content-Type': 'application/json',
     }
 
-    response = requests.post(message_server, json=payload, headers=headers)
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            message_server,
+            json=payload,
+            headers=headers,
+        )
 
     if response.status_code == 200:
         print('Request was successful!')
     else:
-        print(f'Failed with status code: {response.status_code}')
+        logger.exception("Failed to send refund SMS:", {response.status_code})
     return 
